@@ -21,6 +21,7 @@ The `.sl` extension is ignored, it can be removed or changed to anything.
 
 `_start.s` is included with every ssal program, it is required to set up the 'runtime enviorment'.
 It moves the command line arguments into a format ssal code can use.
+It is currently located in `test`.
 
 `clang out.ll _start.o -nostdlib -static`
 
