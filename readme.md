@@ -28,7 +28,7 @@ It is currently stored in ./test.
 Compiles the final executable.
 `-nostdlib` and `-static` are required, your *should* be able to use *some* other clang flags.
 
-- '-o output_name' will work.
+- `-o output_name` will work.
 - optimization flags should work, albiet they might not optomize as well as ir generated with c.
 - debug flags should not work, needs ssalc support.
 - linking, good luck!
