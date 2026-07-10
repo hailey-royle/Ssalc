@@ -10,11 +10,32 @@ Outputs llvmir, intended for bootstrapping future self hosted compiler.
 `make test` to run the tests
 
 
-### tests
+### Usage
+
+`./ssalc file.sl`
+
+Compiles file.sl to out.ll.
+The `.sl` extension is ignored, it can be removed or changed to anything.
+
+`nasm -felf64 _start.s`
+
+`_start.s` is included with every ssal program, it is required to set up the 'runtime enviorment'.
+It moves the command line arguments into a format ssal code can use.
+
+`clang out.ll _start.o -nostdlib -static`
+
+Compiles the final executable.
+`-nostdlib` and `-static` are required, your *should* be able to use *some* other clang flags.
+	- '-o output_name' will work.
+	- optimization flags should work, albiet they might not optomize as well as ir generated with c.
+	- debug flags should not work, needs ssalc support.
+	- linking, good luck!
+
+
+### Test
 
 Tests are located in ./test.
-To run all the tests, `$ ./test.sh` in the test directory.
+To run all the tests, `./test.sh` in the test directory.
 Each test is a subfolder int `./test`, with a `test.sh` script that runs the test.
-`_start.s` is linked with every ssal program, it is required to set up the runtime enviorment ( moves the command line arguments into a format ssal code can use ).
-On failure, ssalc compiler output is output to ./test/*test*/out.txt.
+On failure, ssalc compiler output is redirected to ./test/*test*/out.txt.
 
