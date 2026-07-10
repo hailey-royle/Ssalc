@@ -1,0 +1,12 @@
+
+*
+
+!.gitignore
+!source/
+!source/*
+!source/**/*
+!test/
+!test/*
+!test/**/*
+!makefile
+!readme.md
