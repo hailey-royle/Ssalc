@@ -37,9 +37,11 @@ Compiles the final executable.
 ### Tests
 
 Tests are located in ./test.
-To run all the tests, ./test.sh in the test directory.
+To run all the tests, run ./test.sh in the test directory.
 Each test is a subfolder int ./test, with a test.sh script that runs the test.
-On failure, ssalc compiler output is redirected to ./test/*test*/out.txt.
+On failure, ssalc and clang output is redirected to ./test/*test_name*/out.txt.
+
+`make test t=test_name` runs a specific test, with all ssalc and clang errors and output.
 
 
 ### Documentation
