@@ -1,3 +1,0 @@
-[1m[31mError[39m test.sl:3:10[22m Expected expression after '['.
-	!return[ argument.count ];
-                 ^
