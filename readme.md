@@ -19,7 +19,7 @@ The .sl extension is optional, it can be removed or changed to anything.
 
 `nasm -felf64 _start.s`
 
-`_start.s` is included with every ssal program, it is required to set up the 'runtime enviorment'.
+`_start.s` is included with every ssal program.
 It moves the command line arguments into a format ssal code can use.
 It is currently stored in ./test.
 
