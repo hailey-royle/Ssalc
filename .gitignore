@@ -2,6 +2,8 @@
 *
 
 !.gitignore
+!documentation/
+!documentation/anatomy_of_a_hello_world.md
 !source/
 !source/*
 !source/**/*
