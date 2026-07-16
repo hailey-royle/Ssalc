@@ -256,7 +256,10 @@ One routine can use regiesters from another routines if there is no way to call 
 
 ## Register
 
--TODO
+Registers are a name for a value.
+`identifier: type = expression;` is the basic form for a register assignment statement.
+A registers value can not be changed once it hase been assigned, unless the assignment code has been rerun.
+
 
 ## Types
 
