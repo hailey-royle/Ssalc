@@ -100,7 +100,45 @@ Then it would output "index: 2 argument: ":)"" followed by a newline.
 
 ## Routine
 
-TODO
+```ssal
+#include[ "core.sl" ];
+
+start procedure[ argument @@u8 : u8 ]
+{
+	assert[ argument.count == 2, "Usage: $ space_to_tab filename." ];
+	file_path @u8 = argument[ 1 ];
+	file_string @u8 = string_from_file[ file_path ];
+	assert[ file_string.data != 0, "Error reading file \%\n", file_path ];
+	start_index s64 == string_seek_next_substring( file_string, 0, "        " ];
+	? start_index == file_string.count : !cleanup[], !loop_file[ start_index ];  \{3}\
+
+loop_file routine[ index s64 ];  \{1}\
+	string_delete[ file_string, index, 8 ];
+	string_insert[ file_string, index, "\t" ];
+	new_index s64 = string_seek_next_substring( file_string, index, "        " ];
+	? new_index == file_string.count : !cleanup[], !loop_file[ new_index ]; \{4}\
+
+cleanup routine[];  \{2}\
+	bytes_written s64 = string_to_file[ file_string, argument@[ 1 ]];
+	assert[ bytes_written == file_string.count, "Error writing file \%\n", argument@[ 1 ]];
+	!return[ 0 ];  \{4}\
+}
+```
+\{1}\ - This is a basic routine declaration with one argument.
+Routine arguments get reset every routine call.
+
+\{2}\ - This is a routine with no arguments.
+
+\{3}\ - This is a routine jump, in this case a conditional jump.
+Conditional jumps have the format `? expression : !expression_true[], !expression_false[];`
+If it jumps to `loop_file`, it passes an argument, which becomes the value of `index`.
+
+\{4}\ - If `new_index <> file_string.count` then `loop_file` will be jumped to again.
+The value of register `index` will be reset to `new_index`, and the procedure code will run again.
+
+
+\{4}\ - `return` is a jump, but not a routine call.
+It exits the procedure with its return arguments.
 
 ## Register
 
@@ -163,14 +201,16 @@ vector3_instance vector3 = [ 0, 5.5, 893.333 ];
 Unions are a combination of several types into the same memory.
 
 ```ssal
+parts structure[
+	r u8,
+	g u8,
+	b u8,
+	a u8,
+];
+
 color union[
 	full u32,
-	parts structure[
-		r u8,
-		g u8,
-		b u8,
-		a u8,
-	];
+	part parts,
 ];
 ```
 
