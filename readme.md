@@ -46,5 +46,20 @@ On failure, ssalc and clang output is redirected to ./test/*test_name*/out.txt.
 
 ### Documentation
 
-Currently a hot mess. I will get something together soon.
+The documentation is very crude and unorganized.
+
+#### ssalc/documentation/anatomy_of_a_hello_world.md
+
+Somewhat complete explanation of everything needed for a basic hello world program.
+
+
+#### ssalc/documentation/philosophy.md
+
+Basic outline of the priciples that defined ssal and what I value in a programming language.
+
+
+#### ssalc/documentation/refrence.md
+
+Crude and unfinished.
+The refrence will be a knowledge base for all the ssal language and core.sl standard library.
 
