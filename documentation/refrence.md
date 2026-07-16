@@ -69,7 +69,7 @@ do_nothing procedure[:]  \{2}\
 	!return[];
 }
 
-square procedure[ x s64 : s64 ] \{3}\
+square procedure[ x s64 : s64 ]  \{3}\
 {
 	!return[ x * x ];
 }
@@ -116,7 +116,7 @@ loop_file routine[ index s64 ];  \{1}\
 	string_delete[ file_string, index, 8 ];
 	string_insert[ file_string, index, "\t" ];
 	new_index s64 = string_seek_next_substring( file_string, index, "        " ];
-	? new_index == file_string.count : !cleanup[], !loop_file[ new_index ]; \{4}\
+	? new_index == file_string.count : !cleanup[], !loop_file[ new_index ];  \{4}\
 
 cleanup routine[];  \{2}\
 	bytes_written s64 = string_to_file[ file_string, argument@[ 1 ]];
