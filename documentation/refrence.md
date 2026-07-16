@@ -68,7 +68,6 @@ do_nothing procedure[:]  \{2}\
 {
 	!return[];
 }
-```
 
 square procedure[ x s64 : s64 ] \{3}\
 {
