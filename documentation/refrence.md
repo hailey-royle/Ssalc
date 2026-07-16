@@ -44,6 +44,63 @@ start procedure[ arguments @@u8 : u8 ]
 
 ```
 
+## Literals
+
+#### Decimal Literal
+
+`0, 1, 2, 3, 4, 5, 6, 7, 8, 9, _` - digits.
+A decimal literal is a sequence of digits.
+It can be assigned to any integer or float that it does not overflow.
+A `_` does not change the value, and can not be the first digit.
+
+
+#### Hexidecimal Literal
+
+`0, 1, 2, 3, 4, 5, 6, 7, 8, 9, a, b, c, d, e, f, _` - digits.
+A hexidecimal literal is a sequence of digits.
+It can be assigned to any integer or float that it does not overflow.
+If it is assigned to a float, it will represent the value as bytes.
+An `_` does not change the value, and can not be the first digit.
+A `0x` prefix must be included.
+
+
+#### Floating Point Literal
+
+`0, 1, 2, 3, 4, 5, 6, 7, 8, 9, _` - digits.
+A hexidecimal literal is two sequences of digits separated by `.`.
+It can be assigned to any float that it does not overflow.
+It can be assigned to an integer if doing so would not truncate the value.
+An `_` does not change the value, and can not be the first digit.
+
+
+#### String Literal
+
+`"` - string start / end.
+A string literal is the bytes between two `"`.
+It is encode in UTF-8.
+The `\` chanracter escapes a following sequence of characters.
+Valid sequences are as follows.
+- `\x` - followed by to digits to form a eight bit hexidecimal literal.
+- `\0` - null, equivalent to \x00
+- `\b` - bakcspace, equivalent to \x08
+- `\t` - horizontal tab, equivalent to \x09
+- `\n` - newline, equivalent to \x0a
+- `\v` - vertical tab, equivalent to \x0b
+- `\f` - form feed, equivalent to \x0c
+- `\r` - carrage return, equivalent to \x0d
+- `\e` - escape, equivalent to \x1b
+- `\"` - double quote, equivalent to \x22
+- `\\` - backslash, equivalent to \x5c
+- `\d` - delete, equivalent to \x7f
+
+
+#### Code Literal
+
+`'` - code start / end.
+A code literal is the bytes between two `'`.
+A `'` in a string literal does not end the code literal.
+A code literal must be a valid sequence of tokens.
+
 
 ## Procedure
 
