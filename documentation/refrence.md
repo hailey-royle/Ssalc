@@ -102,6 +102,14 @@ A `'` in a string literal does not end the code literal.
 A code literal must be a valid sequence of tokens.
 
 
+## Identifier
+
+Identifiers are anything in the program defined by the program, registers, types, procedures etc.
+They are made of combinations of ascii letters, number and '_'.
+The first character must not be an number.
+By convention, '_' as the first digit is reserved for internal library use.
+
+
 ## Procedure
 
 ```ssal
