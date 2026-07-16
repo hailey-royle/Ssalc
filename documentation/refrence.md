@@ -303,6 +303,9 @@ dynamic_array structure[
 ];
 ```
 
+
+#### Structure
+
 Structures are a combination of several fields.
 
 ```ssal
@@ -314,6 +317,8 @@ vector3 structure[
 
 vector3_instance vector3 = [ 0, 5.5, 893.333 ];
 ```
+
+#### Union
 
 Unions are a combination of several types into the same memory.
 
@@ -331,6 +336,9 @@ color union[
 ];
 ```
 
+
+#### Enumeration
+
 Enumerations can only be assigned to one of their members.
 
 ```ssal
@@ -347,4 +355,6 @@ token enumeration[
 ## Metaprogramming
 ## Assembly
 ## core.sl
+#### any
+#### allocators
 
