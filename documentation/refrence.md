@@ -121,7 +121,7 @@ loop_file routine[ index s64 ];  \{1}\
 cleanup routine[];  \{2}\
 	bytes_written s64 = string_to_file[ file_string, argument@[ 1 ]];
 	assert[ bytes_written == file_string.count, "Error writing file \%\n", argument@[ 1 ]];
-	!return[ 0 ];  \{4}\
+	!return[ 0 ];  \{5}\
 }
 ```
 \{1}\ - This is a basic routine declaration with one argument.
@@ -136,13 +136,15 @@ If it jumps to `loop_file`, it passes an argument, which becomes the value of `i
 \{4}\ - If `new_index <> file_string.count` then `loop_file` will be jumped to again.
 The value of register `index` will be reset to `new_index`, and the procedure code will run again.
 
-
-\{4}\ - `return` is a jump, but not a routine call.
+\{5}\ - `return` is a jump, but not a routine call.
 It exits the procedure with its return arguments.
+
+One routine can use regiesters from another routines if there is no way to call the first routine without first calling the second.
+
 
 ## Register
 
-TODO
+-TODO
 
 ## Types
 
