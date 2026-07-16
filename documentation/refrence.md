@@ -110,6 +110,53 @@ The first character must not be an number.
 By convention, '_' as the first digit is reserved for internal library use.
 
 
+## Operators and Punctuation
+
+`:`  - result
+`=`  - assignment
+`#`  - execute at compilation
+`!`  - jump call
+`,`  - list seperator
+`;`  - statement end
+`(`  - expression start
+`)`  - expression end
+`[`  - argument open
+`]`  - argument close
+`{`  - scope start
+`}`  - scope end
+`\{` - comment start
+`}\` - comment end
+`"`  - string start / string end
+`'`  - code start / code end
+`\`  - escape in string
+
+`+`  - addition operator
+`-`  - subtraction / negation operator
+`*`  - multiplication operator
+`/`  - divistion operator
+`%`  - modulo operator
+`~`  - bitwise not operator
+`&`  - bitwise and operator
+`|`  - bitwise or operator
+`\`` - bitwise xor operator
+`~~` - logical not operator
+`&&` - logical and operator
+`||` - logical or operator
+`\`\`` - logical xor operator
+`==` - equals operator
+`<`  - less then operator
+`>`  - greator then operator
+`<=` - less then or equals operator
+`>=` - greator then or equals operator
+`<>` - less or greator then operator
+`?`  - conditional operator
+`$`  - selection operator
+
+`.`  - composite member operator
+`@`  - array type / index operator
+`^`  - pointer type / refrence operator / derefrence operator
+
+
 ## Procedure
 
 ```ssal
