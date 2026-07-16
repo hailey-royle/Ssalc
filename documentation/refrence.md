@@ -261,6 +261,44 @@ Registers are a name for a value.
 A registers value can not be changed once it hase been assigned, unless the assignment code has been rerun.
 
 
+## Expression
+
+Expressions are built with any value: literal, register, procedure return.
+Precidence is explicitly defined by wrapping in `()`.
+
+
+#### Condition
+
+
+```ssal
+\{
+basic contidional format:
+? expression : if_true, if_false
+}\
+
+reg s64 = ? a == b : 0, b;
+reg2 s64 = something * ? a == b : 0, b + something_else;
+\{ reg2 s64 = something * ( ? a == b : 0, b ) + something_else; }\
+? reg > 20 : proca[], procb[];  \{ calls must not return anything }\
+ret s64 = ? reg > 20 : procc[], procd[];  \{ calls must return the same type }\
+? ret == reg : !jumpa[], !jumpb[];
+```
+
+
+#### Match
+
+```ssal
+\{
+basic match format:
+$ expression : default,
+	a -> a_handle,
+	b -> b_handle,
+	c -> c_handle;
+}\
+
+\{ has the same usage rules as a condition }\
+```
+
 ## Types
 
 Basic types:

@@ -4,6 +4,8 @@
 !.gitignore
 !documentation/
 !documentation/anatomy_of_a_hello_world.md
+!documentation/philosophy.md
+!documentation/refrence.md
 !source/
 !source/*
 !source/**/*
