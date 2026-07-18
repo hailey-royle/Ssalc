@@ -10,7 +10,7 @@ asan:
 test:
 ifdef t
 	./ssalc test/$(t)/test.sl
-	clang test/$(t)/test.ll test/_start.o -nostdlib -static -o $(t)
+	clang test/$(t)/test.ll _start.o -nostdlib -static -o $(t)
 else
 	time $(SHELL) -c "cd test && ./test.sh"
 endif
