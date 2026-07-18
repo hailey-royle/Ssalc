@@ -554,5 +554,6 @@ int main( int argc, char* argv[] ){
 	}
 	string_free( &file.source );
 	string_free( &file.output );
+	free( file.raw_node.data );
 	return 0;
 }
