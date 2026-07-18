@@ -54,17 +54,6 @@ struct source_file {
 	uint32_t column;
 };
 
-struct source_file_array {
-	struct ast_node* data;
-	uint32_t count;
-	uint32_t allocated;
-};
-#define source_file_array_new( name ) array_new( (struct array*) name, sizeof( struct source_file ));
-
-struct compiler_context {
-	struct source_file_array file;
-};
-
 enum compiler_error_level {
 	compiler_level,
 	error_level,
