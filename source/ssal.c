@@ -19,7 +19,6 @@ enum ast_node_kind {
 	argument_close_node,
 	scope_open_node,
 	scope_close_node,
-	declaration_node,
 	statment_end_node,
 	result_node,
 	array_node,
@@ -188,27 +187,15 @@ struct ast_node* next_node( struct source_file* file ){
 		file->index += 1;
 		node->raw_length += 1;
 		node->kind = scope_close_node;
-	} else if( ':' == file->source.data[ file->index ]){
-		file->column += 1;
-		file->index += 1;
-		node->raw_length += 1;
-		node->kind = declaration_node;
 	} else if( ';' == file->source.data[ file->index ]){
 		file->column += 1;
 		file->index += 1;
 		node->raw_length += 1;
 		node->kind = statment_end_node;
-	} else if( '-' == file->source.data[ file->index ]){
+	} else if( ':' == file->source.data[ file->index ]){
 		file->column += 1;
 		file->index += 1;
 		node->raw_length += 1;
-		if( '>' == file->source.data[ file->index ]){
-			file->column += 1;
-			file->index += 1;
-		node->raw_length += 1;
-		} else {
-			report_error( file, node, error_level, "Invalid syntax. (did you mean '->' ?)" );
-		}
 		node->kind = result_node;
 	} else if( '@' == file->source.data[ file->index ]){
 		file->column += 1;
@@ -256,11 +243,7 @@ struct ast_node* parse_procedure_declaration_arguments( struct source_file* file
 	if( node->kind != identifier_node ){
 		report_error( file, node, error_level, "Expected argument name." );
 	}
-	node->child = next_node( file );
-	if( node->child->kind != declaration_node ){
-		report_error( file, node, error_level, "Expected ':' after argument declaration." );
-	}
-	node->child->child = parse_type( file );
+	node->child  = parse_type( file );
 	node->sibling = next_node( file );
 	node = node->sibling;
 	if( node->kind != result_node ){
@@ -330,14 +313,10 @@ struct ast_node* parse_global_identifier_declaration( struct source_file* file )
 	assert( file != NULL, "Malformed argument." );
 	assert( file->source.data != NULL, "Malformed argument." );
 	struct ast_node* local_root_node = next_node( file );
-	if( local_root_node->kind != declaration_node ){
-		report_error( file, local_root_node, error_level, "Expected ':' after identifier declaration." );
-	}
-	local_root_node->child = next_node( file );
-	if( local_root_node->child->kind != procedure_node ){
+	if( local_root_node->kind != procedure_node ){
 		report_error( file, local_root_node->child, error_level, "All global scope identifiers (currently) must be procedures." );
 	}
-	local_root_node->child->child = parse_procedure_declaration_arguments( file );
+	local_root_node->child = parse_procedure_declaration_arguments( file );
 	local_root_node->sibling = parse_procedure_body( file );
 	return local_root_node;
 }
@@ -387,14 +366,14 @@ void validate_file( struct source_file* file ){
 	if( !char_array_equal( node->raw, "start", 5 )){
 		report_error( file, node, error_level, "Only start procedure in global scope." );
 	}
-	if( !char_array_equal( node->child->child->raw, "procedure", 9 )){
+	if( !char_array_equal( node->child->raw, "procedure", 9 )){
 		report_error( file, node->child->child, error_level, "'start' must be a procedure." );
 	}
-	if( !char_array_equal( node->child->child->child->sibling->raw, "argument", 8 )){
+	if( !char_array_equal( node->child->child->sibling->raw, "argument", 8 )){
 		report_error( file, node->child->child->child->sibling, error_level, "'start' must have type signature 'procedure[ argument: @@u8 -> u8 ]." );
 	}
 	if( !char_array_equal( node->child->sibling->sibling->child->raw, "return", 6 )){
-		report_error( file, node->child->sibling->sibling->child, error_level, "Temp: 'start' proedure must '!return'." );
+		report_error( file, node->child->sibling->sibling->child, error_level, "Temp: 'start' procedure must '!return'." );
 	}
 }
 
@@ -413,9 +392,8 @@ struct ast_node* procedure_return_type( struct source_file* file, struct ast_nod
 	assert( file->source.data != NULL, "Malformed argument." );
 	assert( procedure_root_node != NULL, "Malformed argument." );
 	assert( procedure_root_node->kind == identifier_node, "Malformed argument." );
-	assert( procedure_root_node->child->kind == declaration_node, "Malformed argument." );
-	assert( procedure_root_node->child->child->kind == procedure_node, "Malformed argument." );
-	struct ast_node* return_type_node = procedure_root_node->child->child->child; // first procedure argument name
+	assert( procedure_root_node->child->kind == procedure_node, "Malformed argument." );
+	struct ast_node* return_type_node = procedure_root_node->child->child; // first procedure argument name
 	while( return_type_node->kind != result_node ){
 		return_type_node = return_type_node->sibling;
 	}
@@ -495,10 +473,9 @@ void output_procedure( struct source_file* file, struct ast_node* procedure_root
 	assert( file->source.data != NULL, "Malformed argument." );
 	assert( procedure_root_node != NULL, "Malformed argument." );
 	assert( procedure_root_node->kind == identifier_node, "Malformed argument." );
-	assert( procedure_root_node->child->kind == declaration_node, "Malformed argument." );
-	assert( procedure_root_node->child->child->kind == procedure_node, "Malformed argument." );
+	assert( procedure_root_node->child->kind == procedure_node, "Malformed argument." );
 	assert( procedure_root_node->child->sibling->kind == scope_open_node, "Malformed argument." );
-	assert( procedure_root_node->child->child->child->kind == argument_open_node, "Malformed argument." );
+	assert( procedure_root_node->child->child->kind == argument_open_node, "Malformed argument." );
 	string_append( &file->output, "define ", 7 );
 	{
 		struct ast_node* return_type = procedure_return_type( file, procedure_root_node );
@@ -510,9 +487,9 @@ void output_procedure( struct source_file* file, struct ast_node* procedure_root
 	}
 	output_global_identifier( file, procedure_root_node );
 	string_append( &file->output, "( ", 2 );
-	ouput_argument( file, procedure_root_node->child->child->child->sibling ); // first argument
-	if( procedure_root_node->child->child->child->sibling->sibling->kind != result_node ){
-		report_error( file, procedure_root_node->child->child->child->sibling->sibling, compiler_level, "Temp: Compiler only supports one function argument." );
+	ouput_argument( file, procedure_root_node->child->child->sibling ); // first argument
+	if( procedure_root_node->child->child->sibling->sibling->kind != result_node ){
+		report_error( file, procedure_root_node->child->child->sibling->sibling, compiler_level, "Temp: Compiler only supports one function argument." );
 	} 
 	string_append( &file->output, "){\n", 3 );
 	output_procedure_body( file, procedure_root_node );
@@ -546,7 +523,7 @@ int main( int argc, char* argv[] ){
 		printf( "Error opening file.\n" );
 	}
 	parse_file( &file );
-//	print_ast( &file );
+	print_ast( &file );
 	validate_file( &file );
 	output_file( &file );
 	error = string_to_file( &file.output, "out.ll" );
