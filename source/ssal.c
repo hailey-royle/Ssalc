@@ -85,8 +85,8 @@ int line_length( char* line ){
 }
 
 void report_error( struct source_file* source, struct ast_node* node, enum compiler_error_level level, char* message ){
-	char* start = node->raw - node->column;
-	int length = line_display_length( start, node->column + 1 );
+	char* start = node->raw - node->column + 1;
+	int length = line_display_length( start, node->column );
 	int bytes = line_length( start );
 	if( level == compiler_level ){
 		printf( "%s%sCompiler%s ", ansi_bold_start, ansi_foreground_magenta, ansi_foreground_default );
@@ -137,7 +137,7 @@ struct ast_node* next_node( struct source_file* file ){
 	struct ast_node* node = ast_node_array_new( file );
 	while( char_is_space( file->source.data[ file->index ])){
 		if( '\n' == file->source.data[ file->index ]){
-			file->column = 0;
+			file->column = 1;
 			file->line += 1;
 		} else {
 			file->column += 1;
@@ -538,8 +538,9 @@ int main( int argc, char* argv[] ){
 		exit( 0 );
 	}
 	struct source_file file = { 0 };
-	file.line = 1;
 	file.name = argv[ 1 ];
+	file.line = 1;
+	file.column = 1;
 	bool error = string_from_file( &file.source, file.name );
 	if( error ){
 		printf( "Error opening file.\n" );
