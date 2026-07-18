@@ -10,5 +10,5 @@ ifdef t
 	./ssalc test/$(t)/test.sl
 	clang test/$(t)/test.ll test/_start.o -nostdlib -static -o $(t)
 else
-	$(SHELL) -c "cd test && ./test.sh"
+	time $(SHELL) -c "cd test && ./test.sh"
 endif
