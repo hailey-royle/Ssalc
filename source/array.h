@@ -1,8 +1,6 @@
 #ifndef ARRAYH
 #define ARRAYH
 
-#include "assert.h"
-
 struct array {
 	void* data;
 	uint32_t count;

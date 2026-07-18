@@ -1,12 +1,5 @@
-#ifndef STRING
-#define STRING
-
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
-#include <sys/stat.h>
-
-#include "assert.h"
+#ifndef STRINGH
+#define STRINGH
 
 struct string {
 	char* data;

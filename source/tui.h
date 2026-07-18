@@ -1,12 +1,5 @@
-#ifndef TUI
-#define TUI
-
-#include <stdlib.h>
-#include <unistd.h>
-#include <termios.h>
-#include <sys/ioctl.h>
-
-#include "assert.h"
+#ifndef TUIH
+#define TUIH
 
 #define backspace_key 8
 #define tab_key 9
