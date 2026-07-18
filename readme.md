@@ -28,7 +28,7 @@ The file extension is ignored by the compiler, but by convention it should be .s
 It moves the command line arguments into the format ssal code expects, and exits after the start procedure is returned from.
 
 
-`clang file.ll _start.o -nostdlib -static` - To compiles the final executable.
+`clang file.ll _start.o -nostdlib -static` - To compile the final executable.
 
 `-nostdlib` and `-static` are required, your *should* be able to use *some* other clang flags.
 
@@ -40,9 +40,9 @@ It moves the command line arguments into the format ssal code expects, and exits
 
 ## Tests
 
-`make test` - To run all tests
+`make build test` - To run all tests
 
-`make test t=test_name` To run a specific test, with all ssalc and clang errors and output.
+`make build test t=test_name` To run a specific test, with all ssalc and clang errors and output.
 
 Tests are located in `./test`, each test is a subfolder in `./test`.
 Every test has a `test.sh` script that runst the test, and a `test.sl` file which is the code to be tested.
