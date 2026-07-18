@@ -603,6 +603,14 @@ void output_file( struct source_file* file ){
 	return;
 }
 
+void write_output_file( struct source_file* file ){
+	file->name[ strlen( file->name ) - 2 ] = 'l';
+	bool error = string_to_file( &file->output, file->name );
+	if( error ){
+		printf( "Error writing file.\n" );
+	}
+}
+
 int main( int argc, char* argv[] ){
 	if( argc != 2 ){
 		printf( "Usage: ssalc file\n" );
@@ -620,10 +628,7 @@ int main( int argc, char* argv[] ){
 	print_ast( &file );
 	validate_file( &file );
 	output_file( &file );
-	error = string_to_file( &file.output, "out.ll" );
-	if( error ){
-		printf( "Error writing file.\n" );
-	}
+	write_output_file( &file );
 	string_free( &file.source );
 	string_free( &file.output );
 	free( file.raw_node.data );
