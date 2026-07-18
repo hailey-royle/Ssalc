@@ -42,6 +42,18 @@ struct ast_node_array {
 };
 #define ast_node_array_new( name ) array_new( (struct array*) name, sizeof( struct ast_node ));
 
+struct ast_node_pointer_array {
+	struct ast_node** data;
+	uint32_t count;
+	uint32_t allocated;
+};
+#define ast_node_pointer_array_new( name ) array_new( (struct array*) name, sizeof( struct ast_node* ));
+
+struct procedure_internal {
+	struct ast_node* return_node;
+	struct ast_node_pointer_array local_register;
+};
+
 struct source_file {
 	struct ast_node_array raw_node;
 	struct string source;
@@ -59,6 +71,24 @@ enum compiler_error_level {
 	warning_level,
 	note_level,
 };
+
+void print_ast_node( struct ast_node* node, int depth ){
+	assert( node != NULL, "Malformed argument." );
+	printf( "%*c%.*s\n", depth, ' ', node->raw_length, node->raw );
+	if( node->child != NULL ){
+		print_ast_node( node->child, depth + 1 );
+	}
+	if( node->sibling != NULL ){
+		print_ast_node( node->sibling, depth );
+	}
+}
+
+void print_ast( struct source_file* file ){
+	assert( file != NULL, "Malformed argument." );
+	assert( file->source.data != NULL, "Malformed argument." );
+	assert( file->root_node != NULL, "Malformed argument." );
+	print_ast_node( file->root_node, 1 );
+}
 
 int line_display_length( char* line, int bytes ){
 	int length = 0;
@@ -83,7 +113,7 @@ int line_length( char* line ){
 	return i;
 }
 
-void report_error( struct source_file* source, struct ast_node* node, enum compiler_error_level level, char* message ){
+void report_error( struct source_file* file, struct ast_node* node, enum compiler_error_level level, char* message ){
 	char* start = node->raw - node->column + 1;
 	int length = line_display_length( start, node->column );
 	int bytes = line_length( start );
@@ -96,7 +126,10 @@ void report_error( struct source_file* source, struct ast_node* node, enum compi
 	} else if( level == note_level ){
 		printf( "%s%sNote%s ", ansi_bold_start, ansi_foreground_green, ansi_foreground_default );
 	}
-	printf( "%s:%d:%d%s %s\n%.*s\n%*c\n", source->name, node->line, node->column, ansi_bold_end, message, bytes, start, length, '^' );
+	printf( "%s:%d:%d%s %s\n%.*s\n%*c\n", file->name, node->line, node->column, ansi_bold_end, message, bytes, start, length, '^' );
+	printf( "\n" );
+	print_ast( file );
+	printf( "\n" );
 	exit( 1 );
 }
 
@@ -231,7 +264,7 @@ struct ast_node* parse_type( struct source_file* file ){
 	return local_root_node;
 }
 
-struct ast_node* parse_procedure_declaration_arguments( struct source_file* file ){
+struct ast_node* parse_start_procedure_declaration_arguments( struct source_file* file ){
 	assert( file != NULL, "Malformed argument." );
 	assert( file->source.data != NULL, "Malformed argument." );
 	struct ast_node* local_root_node = next_node( file );
@@ -247,7 +280,7 @@ struct ast_node* parse_procedure_declaration_arguments( struct source_file* file
 	node->sibling = next_node( file );
 	node = node->sibling;
 	if( node->kind != result_node ){
-		report_error( file, node, error_level, "Expected '->' after procedure argument list." );
+		report_error( file, node, error_level, "Expected ':' after procedure argument list." );
 	}
 	node->sibling = parse_type( file );
 	node = node->sibling;
@@ -257,6 +290,18 @@ struct ast_node* parse_procedure_declaration_arguments( struct source_file* file
 		report_error( file, node, error_level, "Expected ']' after procedure arguments." );
 	}
 	return local_root_node;
+}
+
+struct ast_node* parse_expression( struct source_file* file ){
+	assert( file != NULL, "Malformed argument." );
+	assert( file->source.data != NULL, "Malformed argument." );
+	struct ast_node* node = next_node( file );
+	if( node->kind == literal_integer_node ){
+	} else if( node->kind == identifier_node ){
+	} else {
+		report_error( file, node, error_level, "Expected expression after '['." );
+	}
+	return node;
 }
 
 struct ast_node* parse_jump( struct source_file* file ){
@@ -272,11 +317,8 @@ struct ast_node* parse_jump( struct source_file* file ){
 	if( node->kind != argument_open_node ){
 		report_error( file, node, error_level, "Expected '[' after jump name." );
 	}
-	node->sibling = next_node( file );
+	node->sibling = parse_expression( file );
 	node = node->sibling;
-	if( node->kind != literal_integer_node ){
-		report_error( file, node, error_level, "Expected expression after '['." );
-	}
 	node->sibling = next_node( file );
 	node = node->sibling;
 	if( node->kind != argument_close_node ){
@@ -309,14 +351,14 @@ struct ast_node* parse_procedure_body( struct source_file* file ){
 	return local_root_node;
 }
 
-struct ast_node* parse_global_identifier_declaration( struct source_file* file ){
+struct ast_node* parse_start_procedure( struct source_file* file ){
 	assert( file != NULL, "Malformed argument." );
 	assert( file->source.data != NULL, "Malformed argument." );
 	struct ast_node* local_root_node = next_node( file );
 	if( local_root_node->kind != procedure_node ){
-		report_error( file, local_root_node->child, error_level, "All global scope identifiers (currently) must be procedures." );
+		report_error( file, local_root_node->child, error_level, "'start' must be type 'procedure'." );
 	}
-	local_root_node->child = parse_procedure_declaration_arguments( file );
+	local_root_node->child = parse_start_procedure_declaration_arguments( file );
 	local_root_node->sibling = parse_procedure_body( file );
 	return local_root_node;
 }
@@ -326,55 +368,107 @@ void parse_file( struct source_file* file ){
 	assert( file->source.data != NULL, "Malformed argument." );
 	file->root_node = next_node( file );
 	struct ast_node* node = file->root_node;
-	while( 1 ){
-		if( node->kind != identifier_node ){
-			report_error( file, node, error_level, "Expected identifier starting declaration when parsing global scope." );
-		}
-		node->child = parse_global_identifier_declaration( file );
-		node->sibling = next_node( file );
-		if( node->sibling->kind == error_node ){
-			break;
-		} else {
-			report_error( file, node, error_level, "Only start procedure in global scope." );
-		}
+	if( !char_array_equal( node->raw, "start", 5 )){
+		report_error( file, node, error_level, "Only start procedure in global scope." );
+	}
+	node->child = parse_start_procedure( file );
+	node->sibling = next_node( file );
+	if( node->sibling->kind != error_node ){
+		report_error( file, node, error_level, "Only start procedure in global scope." );
 	}
 }
 
-void print_ast_node( struct ast_node* node, int depth ){
-	assert( node != NULL, "Malformed argument." );
-	printf( "%*c%.*s\n", depth, ' ', node->raw_length, node->raw ); 
-	if( node->child != NULL ){
-		print_ast_node( node->child, depth + 1 );
+void free_procedure_internal( struct procedure_internal* procedure ){
+	assert( procedure != NULL, "Malformed argument." );
+	free( procedure->local_register.data );
+}
+
+void validate_type_match( struct source_file* file, struct ast_node* type_node, struct ast_node* match_node ){
+	assert( type_node != NULL, "Malformed argument." );
+	assert( match_node != NULL, "Malformed argument." );
+	assert( type_node->kind == identifier_node, "Malformed data." );
+	if( !char_array_equal( type_node->raw, "u8", 2 )){
+		report_error( file, type_node, compiler_level, "Expected type for type match." );
 	}
-	if( node->sibling != NULL ){
-		print_ast_node( node->sibling, depth );
+	if( match_node->kind != literal_integer_node ){
+		report_error( file, match_node, compiler_level, "Expected integer fot type match." );
 	}
 }
 
-void print_ast( struct source_file* file ){
+void validate_jump( struct source_file* file, struct procedure_internal* procedure, struct ast_node* local_root_node ){
 	assert( file != NULL, "Malformed argument." );
-	assert( file->source.data != NULL, "Malformed argument." );
-	assert( file->root_node != NULL, "Malformed argument." );
-	print_ast_node( file->root_node, 1 );
+	assert( procedure != NULL, "Malformed argument." );
+	assert( local_root_node != NULL, "Malformed argument." );
+	struct ast_node* jump_node = local_root_node->child;
+	if( !char_array_equal( jump_node->raw, "return", 6 )){
+		report_error( file, jump_node, error_level, "Jump can only go to 'return'." );
+	}
+	jump_node = jump_node->child->sibling;
+	validate_type_match( file, procedure->return_node, jump_node );
+}
+
+void validate_procedure_body( struct source_file* file, struct procedure_internal* procedure, struct ast_node* local_root_node ){
+	assert( file != NULL, "Malformed argument." );
+	assert( procedure != NULL, "Malformed argument." );
+	assert( local_root_node != NULL, "Malformed argument." );
+	struct ast_node* body_node = local_root_node->child->sibling->sibling;
+	if( body_node->kind != jump_node ){
+		report_error( file, body_node, error_level, "Procedure routine must end with '!'." );
+	}
+	validate_jump( file, procedure, body_node );
+	body_node = body_node->sibling;
+	if( body_node->kind != scope_close_node ){
+		report_error( file, body_node, error_level, "Procedure routine must end with '!'." );
+	}
+}
+
+void validate_start_procedure( struct source_file* file, struct ast_node* local_root_node ){
+	assert( file != NULL, "Malformed argument." );
+	assert( local_root_node != NULL, "Malformed argument." );
+	struct procedure_internal procedure = { 0 };
+	struct ast_node* type_node = local_root_node->child;
+	if( !char_array_equal( type_node->raw, "procedure", 9 )){
+		report_error( file, type_node, error_level, "'start' must be a procedure." );
+	}
+	{
+		type_node = type_node->child->sibling;
+		if( !char_array_equal( type_node->raw, "argument", 8 )){
+			report_error( file, type_node, error_level, "'start' must have type signature 'procedure[ argument: @@u8 -> u8 ]." );
+		}
+		struct ast_node** register_pointer = ast_node_pointer_array_new( &procedure.local_register );
+		*register_pointer = type_node;
+		{
+			struct ast_node* argument_type_node = type_node->child;
+			if( argument_type_node->kind != array_node ){
+				report_error( file, type_node, error_level, "'start' must have type signature 'procedure[ argument: @@u8 -> u8 ]." );
+			}
+			argument_type_node = argument_type_node->child;
+			if( argument_type_node->kind != array_node ){
+				report_error( file, type_node, error_level, "'start' must have type signature 'procedure[ argument: @@u8 -> u8 ]." );
+			}
+			argument_type_node = argument_type_node->child;
+			if( !char_array_equal( argument_type_node->raw, "u8", 2 )){
+				report_error( file, type_node, error_level, "'start' must have type signature 'procedure[ argument: @@u8 -> u8 ]." );
+			}
+			procedure.return_node = argument_type_node;
+		}
+		type_node = type_node->sibling->sibling;
+		if( !char_array_equal( type_node->raw, "u8", 2 )){
+			report_error( file, type_node, error_level, "'start' must have type signature 'procedure[ argument: @@u8 -> u8 ]." );
+		}
+	}
+	validate_procedure_body( file, &procedure, local_root_node );
+	free_procedure_internal( &procedure );
 }
 
 void validate_file( struct source_file* file ){
 	assert( file != NULL, "Malformed argument." );
 	assert( file->source.data != NULL, "Malformed argument." );
 	assert( file->root_node != NULL, "Malformed argument." );
-	struct ast_node* node = file->root_node;
-	if( !char_array_equal( node->raw, "start", 5 )){
-		report_error( file, node, error_level, "Only start procedure in global scope." );
+	if( !char_array_equal( file->root_node->raw, "start", 5 )){
+		report_error( file, file->root_node, error_level, "Only start procedure in global scope." );
 	}
-	if( !char_array_equal( node->child->raw, "procedure", 9 )){
-		report_error( file, node->child->child, error_level, "'start' must be a procedure." );
-	}
-	if( !char_array_equal( node->child->child->sibling->raw, "argument", 8 )){
-		report_error( file, node->child->child->child->sibling, error_level, "'start' must have type signature 'procedure[ argument: @@u8 -> u8 ]." );
-	}
-	if( !char_array_equal( node->child->sibling->sibling->child->raw, "return", 6 )){
-		report_error( file, node->child->sibling->sibling->child, error_level, "Temp: 'start' procedure must '!return'." );
-	}
+	validate_start_procedure( file, file->root_node );
 }
 
 void confirm_node_is_type( struct source_file* file, struct ast_node* node ){
