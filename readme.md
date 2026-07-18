@@ -1,7 +1,8 @@
 
 # Ssalc - Ssal to llvmir compiler.
 
-Ssalc is intended for bootstrapping a future self hosted compiler.
+Ssalc is intended for bootstrapping a future self hosted compiler.  
+It currently only supports x86_64 Linux.
 
 1. [Building Ssalc](#building-ssalc)
 2. [Using Ssalc](#using-ssalc)
@@ -26,6 +27,7 @@ The file extension is ignored by the compiler, but by convention it should be .s
 
 `_start.s` is included with every ssal program.
 It moves the command line arguments into the format ssal code expects, and exits after the start procedure is returned from.
+It currently only supports x86_64 Linux.
 
 
 `clang file.ll _start.o -nostdlib -static` - To compile the final executable.
