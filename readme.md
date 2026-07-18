@@ -1,19 +1,17 @@
 
-# Ssalc
-
-> Ssal to llvmir compiler.
+# Ssalc - Ssal to llvmir compiler.
 
 Ssalc is intended for bootstrapping a future self hosted compiler.
 
-2. [Building Ssalc](##building-ssalc)
-2. [Using Ssalc](##using-ssalc)
-3. [Tests](##tests)
-4. [Documentation](##documentation)
+1. [Building Ssalc](#building-ssalc)
+2. [Using Ssalc](#using-ssalc)
+3. [Tests](#tests)
+4. [Documentation](#documentation)
 
 
 ## Building Ssalc
 
-`make build` - To compile Ssalc
+`make build` - To compile Ssalc  
 `clang source/ssal.c` - Also works
 
 
