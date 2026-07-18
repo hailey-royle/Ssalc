@@ -623,11 +623,11 @@ void output_procedure_body( struct source_file* file, struct ast_node* procedure
 			register_node = register_node->child;
 			if( char_array_equal( register_node->raw, "u8", 2 )){
 				string_append( &file->output, "i8 ", 3 );
-			} else {
-				report_error( file, register_node, compiler_level, "Unknown base type, base types:[ u8 ]." );
 			}
-			string_append( &file->output, " ", 1 );
 			register_node = register_node->sibling->sibling;
+			if( register_node->kind == identifier_node ){
+				string_append( &file->output, "%", 1 );
+			}
 			string_append( &file->output, register_node->raw, register_node->raw_length );
 			string_append( &file->output, ", 0", 3 );
 			string_append( &file->output, "\n", 1 );
