@@ -1,64 +1,72 @@
 
-## Ssalc
+# Ssalc
 
-Ssal compiler written in c.
+> Ssal to llvmir compiler.
 
-Outputs llvmir, intended for bootstrapping future self hosted compiler.
+Ssalc is intended for bootstrapping a future self hosted compiler.
 
-`make build` to compile
+2. [Building Ssalc](##building-ssalc)
+2. [Using Ssalc](##using-ssalc)
+3. [Tests](##tests)
+4. [Documentation](##documentation)
 
-`make test` to run the tests
+
+## Building Ssalc
+
+`make build` - To compile Ssalc
+`clang source/ssal.c` - Also works
 
 
-### Usage
+## Using Ssalc
 
-`./ssalc file.sl`
+`./ssalc file.sl` - To compile file.sl to file.ll
 
-Compiles file.sl to out.ll.
-The .sl extension is optional, it can be removed or changed to anything.
+The file extension is ignored by the compiler, but by convention it should be .sl.
 
-`nasm -felf64 _start.s`
+
+`nasm -felf64 _start.s` - To assemble _start.s
 
 `_start.s` is included with every ssal program.
-It moves the command line arguments into a format ssal code can use.
+It moves the command line arguments into the format ssal code expects.
 It is currently stored in ./test.
 
-`clang out.ll _start.o -nostdlib -static`
 
-Compiles the final executable.
+`clang file.ll _start.o -nostdlib -static` - To compiles the final executable.
+
 `-nostdlib` and `-static` are required, your *should* be able to use *some* other clang flags.
 
 - `-o output_name` will work.
-- optimization flags should work, albiet they might not optomize as well as ir generated with c.
-- debug flags should not work, needs ssalc support.
-- linking, good luck!
+- optimization flags should work, albiet not optomizing as well as ir generated from c with clang.
+- debug flags will not work, they need Ssalc support.
+- linking: good luck!
 
 
-### Tests
+## Tests
 
-Tests are located in ./test.
-To run all the tests, run ./test.sh in the test directory.
-Each test is a subfolder int ./test, with a test.sh script that runs the test.
-On failure, ssalc and clang output is redirected to ./test/*test_name*/out.txt.
+`make test` - To run all tests
 
-`make test t=test_name` runs a specific test, with all ssalc and clang errors and output.
+`make test t=test_name` To run a specific test, with all ssalc and clang errors and output.
+
+Tests are located in `./test`, each test is a subfolder in `./test`.
+Every test has a `test.sh` script that runst the test, and a `test.sl` file which is the code to be tested.
+On failure, ssalc and clang output is redirected to `./test/*test_name*/out.txt`.
 
 
-### Documentation
+## Documentation
 
 The documentation is very crude and unorganized.
 
-#### ssalc/documentation/anatomy_of_a_hello_world.md
+`ssalc/documentation/anatomy_of_a_hello_world.md`
 
 Somewhat complete explanation of everything needed for a basic hello world program.
 
 
-#### ssalc/documentation/philosophy.md
+`ssalc/documentation/philosophy.md`
 
 Basic outline of the priciples that defined ssal and what I value in a programming language.
 
 
-#### ssalc/documentation/refrence.md
+`ssalc/documentation/refrence.md`
 
 Crude and unfinished.
 The refrence will be a knowledge base for all the ssal language and core.sl standard library.
