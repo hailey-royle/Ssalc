@@ -11,7 +11,7 @@ if [ $? != 0 ]; then
 fi
 
 # compile test.ll to test with normal flags, redirect any errors to out.txt.
-clang test.ll ../_start.o -nostdlib -static -o test &>out.txt
+clang test.ll ../../_start.o -nostdlib -static -o test &>out.txt
 if [ $? !=  0 ]; then
 	echo -e "${PWD##*/} \t[\e[31m clang failed \e[0m]"
 	exit

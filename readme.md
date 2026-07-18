@@ -22,11 +22,10 @@ Ssalc is intended for bootstrapping a future self hosted compiler.
 The file extension is ignored by the compiler, but by convention it should be .sl.
 
 
-`nasm -felf64 _start.s` - To assemble _start.s
+`clang -c -masm=intel source/_start.s` - To assemble _start.s
 
 `_start.s` is included with every ssal program.
-It moves the command line arguments into the format ssal code expects.
-It is currently stored in ./test.
+It moves the command line arguments into the format ssal code expects, and exits after the start procedure is returned from.
 
 
 `clang file.ll _start.o -nostdlib -static` - To compiles the final executable.
