@@ -1,7 +1,7 @@
-start procedure[ argument @@u8 : u8 ]
+start procedure[ argument @@i8 : i64 ]
 {
-	a u8 = 39;
-	b u8 = a;
-	c u8 = b;
+	a i64 = 39;
+	b i64 = a;
+	c i64 = b;
 	!return[ c ];
 }

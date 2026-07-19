@@ -1,5 +1,5 @@
-start procedure[ argument @@u8 : u8 ]
+start procedure[ argument @@i8 : i64 ]
 {
-	register u8 = 11;
+	register i64 = 11;
 	!return[ register ];
 }

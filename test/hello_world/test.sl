@@ -1,5 +1,5 @@
-start procedure[ argument @@u8 : u8 ]
+start procedure[ argument @@i8 : i64 ]
 {
-	write_syscall[ 1, "Hello World!", 12 ];
+	bytes_written i64 = write_syscall[ 1, "Hello World!", 12 ];
 	!return[ 0 ];
 }

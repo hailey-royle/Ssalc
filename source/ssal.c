@@ -254,6 +254,19 @@ struct ast_node* next_node( struct source_file* file ){
 	return node;
 }
 
+bool node_is_type( struct source_file* file, struct ast_node* node ){
+	assert( file != NULL, "Malformed argument." );
+	assert( node != NULL, "Malformed argument." );
+	assert( node->raw != NULL, "Malformed argument." );
+	if( node->kind == array_node ){
+	} else if( char_array_equal( node->raw, "i8", 2 )){
+	} else if( char_array_equal( node->raw, "i64", 2 )){
+	} else {
+		return false;
+	}
+	return true;
+}
+
 struct ast_node* parse_type( struct source_file* file ){
 	assert( file != NULL, "Malformed argument." );
 	assert( file->source.data != NULL, "Malformed argument." );
@@ -261,7 +274,7 @@ struct ast_node* parse_type( struct source_file* file ){
 	struct ast_node* node = local_root_node;
 	while( 1 ){
 		if( node->kind == identifier_node ){
-			if( !char_array_equal( node->raw, "u8", 2 )){
+			if( !node_is_type( file, node )){
 				report_error( file, node, error_level, "Expected type. ('@' or '^' or type name)" );
 			}
 			break;
@@ -287,7 +300,7 @@ struct ast_node* parse_start_procedure_declaration_arguments( struct source_file
 	if( node->kind != identifier_node ){
 		report_error( file, node, error_level, "Expected argument name." );
 	}
-	node->child  = parse_type( file );
+	node->child = parse_type( file );
 	node->sibling = next_node( file );
 	node = node->sibling;
 	if( node->kind != result_node ){
@@ -429,17 +442,11 @@ void free_procedure_internal( struct procedure_internal* procedure ){
 	free( procedure->local_register.data );
 }
 
-void validate_type( struct source_file* file, struct ast_node* node ){
-	if( !char_array_equal( node->raw, "u8", 2 )){
-		report_error( file, node, error_level, "'start' must have type signature 'procedure[ argument: @@u8 -> u8 ]." );
-	}
-}
-
 void validate_type_match( struct source_file* file, struct procedure_internal* procedure, struct ast_node* type_node, struct ast_node* match_node ){
 	assert( type_node != NULL, "Malformed argument." );
 	assert( match_node != NULL, "Malformed argument." );
 	assert( type_node->kind == identifier_node, "Malformed data." );
-	if( !char_array_equal( type_node->raw, "u8", 2 )){
+	if( !node_is_type( file, type_node )){
 		report_error( file, type_node, compiler_level, "Expected type for type match." );
 	}
 	if( match_node->kind == literal_integer_node ){
@@ -464,7 +471,9 @@ void validate_register( struct source_file* file, struct procedure_internal* pro
 	assert( procedure != NULL, "Malformed argument." );
 	assert( local_root_node != NULL, "Malformed argument." );
 	struct ast_node* node = local_root_node->child;
-	validate_type( file, node );
+	if( !node_is_type( file, node )){
+		report_error( file, node, error_level, "Expected type." );
+	}
 	validate_type_match( file, procedure, node, node->sibling->sibling );
 }
 
@@ -527,13 +536,13 @@ void validate_start_procedure( struct source_file* file, struct ast_node* local_
 				report_error( file, type_node, error_level, "'start' must have type signature 'procedure[ argument: @@u8 -> u8 ]." );
 			}
 			argument_type_node = argument_type_node->child;
-			if( !char_array_equal( argument_type_node->raw, "u8", 2 )){
+			if( !char_array_equal( argument_type_node->raw, "i8", 2 )){
 				report_error( file, type_node, error_level, "'start' must have type signature 'procedure[ argument: @@u8 -> u8 ]." );
 			}
 			procedure.return_node = argument_type_node;
 		}
 		type_node = type_node->sibling->sibling;
-		if( !char_array_equal( type_node->raw, "u8", 2 )){
+		if( !char_array_equal( type_node->raw, "i64", 3 )){
 			report_error( file, type_node, error_level, "'start' must have type signature 'procedure[ argument: @@u8 -> u8 ]." );
 		}
 	}
@@ -551,16 +560,6 @@ void validate_file( struct source_file* file ){
 	validate_start_procedure( file, file->root_node );
 }
 
-void confirm_node_is_type( struct source_file* file, struct ast_node* node ){
-	assert( node != NULL, "Malformed argument." );
-	assert( node->raw != NULL, "Malformed argument." );
-	if( node->kind == array_node ){
-	} else if( char_array_equal( node->raw, "u8", 2 )){
-	} else {
-		report_error( file, node, compiler_level, "Unknown base type, base types:[ u8 ]." );
-	}
-}
-
 struct ast_node* procedure_return_type( struct source_file* file, struct ast_node* procedure_root_node ){
 	assert( file != NULL, "Malformed argument." );
 	assert( file->source.data != NULL, "Malformed argument." );
@@ -572,16 +571,30 @@ struct ast_node* procedure_return_type( struct source_file* file, struct ast_nod
 		return_type_node = return_type_node->sibling;
 	}
 	return_type_node = return_type_node->sibling;
-	confirm_node_is_type( file, return_type_node );
+	if( !node_is_type( file, return_type_node )){
+		report_error( file, return_type_node, compiler_level, "Expected type." );
+	}
 	if( return_type_node->sibling->kind != argument_close_node ){
 		report_error( file, return_type_node, compiler_level, "Temp: only supports one return value" );
 	}
 	return return_type_node;
 }
 
-void output_global_identifier( struct source_file* file, struct ast_node* node ){
+void output_type( struct source_file* file, struct ast_node* node ){
 	assert( file != NULL, "Malformed argument." );
 	assert( file->source.data != NULL, "Malformed argument." );
+	assert( node != NULL, "Malformed argument." );
+	if( node->kind == array_node ){
+		report_error( file, node, compiler_level, "Temp: array not supported in output_type." );
+	} else if( char_array_equal( node->raw, "i8", 2 )){
+		string_append( &file->output, "i8 ", 3 );
+	} else if( char_array_equal( node->raw, "i64", 3 )){
+		string_append( &file->output, "i64 ", 4 );
+	}
+}
+
+void output_global_identifier( struct source_file* file, struct ast_node* node ){
+	assert( file != NULL, "Malformed argument." );
 	assert( node != NULL, "Malformed argument." );
 	assert( node->kind == identifier_node, "Malformed argument." );
 	string_append( &file->output, "@", 1 );
@@ -590,11 +603,12 @@ void output_global_identifier( struct source_file* file, struct ast_node* node )
 
 void ouput_argument( struct source_file* file, struct ast_node* node ){
 	assert( file != NULL, "Malformed argument." );
-	assert( file->source.data != NULL, "Malformed argument." );
 	assert( node != NULL, "Malformed argument." );
 	assert( node->kind == identifier_node, "Malformed argument." );
 	struct ast_node* type = node->child->child;
-	confirm_node_is_type( file, type );
+	if( !node_is_type( file, type )){
+		report_error( file, type, compiler_level, "Expected type." );
+	}
 	if( type->kind == array_node ){
 		string_append( &file->output, "ptr %", 5 );
 		string_append( &file->output, node->raw, node->raw_length );
@@ -602,8 +616,9 @@ void ouput_argument( struct source_file* file, struct ast_node* node ){
 		string_append( &file->output, "i64 %", 5 );
 		string_append( &file->output, node->raw, node->raw_length );
 		string_append( &file->output, ".count ", 7 );
-	} else if( char_array_equal( type->raw, "u8", 2 )){
-		string_append( &file->output, "i8 %", 4 );
+	} else {
+		output_type( file, node );
+		string_append( &file->output, "%", 1 );
 		string_append( &file->output, node->raw, node->raw_length );
 	}
 	if( node->sibling->kind != result_node ){
@@ -613,7 +628,6 @@ void ouput_argument( struct source_file* file, struct ast_node* node ){
 
 void output_procedure_body( struct source_file* file, struct ast_node* procedure_root_node ){
 	assert( file != NULL, "Malformed argument." );
-	assert( file->source.data != NULL, "Malformed argument." );
 	assert( procedure_root_node->kind == identifier_node, "Malformed argument." );
 	struct ast_node* node = procedure_root_node->child->sibling->sibling;
 	while( 1 ){
@@ -623,9 +637,7 @@ void output_procedure_body( struct source_file* file, struct ast_node* procedure
 			string_append( &file->output, register_node->raw, register_node->raw_length );
 			string_append( &file->output, " = add ", 7 );
 			register_node = register_node->child;
-			if( char_array_equal( register_node->raw, "u8", 2 )){
-				string_append( &file->output, "i8 ", 3 );
-			}
+			output_type( file, register_node );
 			register_node = register_node->sibling->sibling;
 			if( register_node->kind == identifier_node ){
 				string_append( &file->output, "%", 1 );
@@ -642,8 +654,8 @@ void output_procedure_body( struct source_file* file, struct ast_node* procedure
 			struct ast_node* return_type_node = procedure_return_type( file, procedure_root_node );
 			if( return_type_node->kind == array_node ){
 				report_error( file, return_type_node, compiler_level, "Temp: Compiler only supports returning basic types." );
-			} else if( char_array_equal( return_type_node->raw, "u8", 2 )){
-				string_append( &file->output, "i8 ", 3 );
+			} else {
+				output_type( file, return_type_node );
 			}
 			jump_call_node = jump_call_node->child->sibling;
 			if( jump_call_node->kind == identifier_node ){
@@ -661,7 +673,6 @@ void output_procedure_body( struct source_file* file, struct ast_node* procedure
 
 void output_procedure( struct source_file* file, struct ast_node* procedure_root_node ){
 	assert( file != NULL, "Malformed argument." );
-	assert( file->source.data != NULL, "Malformed argument." );
 	assert( procedure_root_node != NULL, "Malformed argument." );
 	assert( procedure_root_node->kind == identifier_node, "Malformed argument." );
 	assert( procedure_root_node->child->kind == procedure_node, "Malformed argument." );
@@ -669,11 +680,11 @@ void output_procedure( struct source_file* file, struct ast_node* procedure_root
 	assert( procedure_root_node->child->child->kind == argument_open_node, "Malformed argument." );
 	string_append( &file->output, "define ", 7 );
 	{
-		struct ast_node* return_type = procedure_return_type( file, procedure_root_node );
-		if( char_array_equal( return_type->raw, "u8", 2 )){
-			string_append( &file->output, "i8 ", 3 );
+		struct ast_node* return_type_node = procedure_return_type( file, procedure_root_node );
+		if( return_type_node->kind == identifier_node ){
+			output_type( file, return_type_node );
 		} else {
-			report_error( file, return_type, compiler_level, "Unknown base type, base types:[ u8 ]." );
+			report_error( file, return_type_node, compiler_level, "Unknown base type, base types: i8, i64." );
 		}
 	}
 	output_global_identifier( file, procedure_root_node );
@@ -689,10 +700,9 @@ void output_procedure( struct source_file* file, struct ast_node* procedure_root
 
 void output_file( struct source_file* file ){
 	assert( file != NULL, "Malformed argument." );
-	assert( file->source.data != NULL, "Malformed argument." );
 	assert( file->root_node != NULL, "Malformed argument." );
 	char llvmir_start[] = "target triple = \"x86_64-unknown-linux-gnu\"\n\n";
-	string_append( &file->output, llvmir_start, sizeof( llvmir_start ));
+	string_append( &file->output, llvmir_start, sizeof( llvmir_start ) - 1 );
 	output_procedure( file, file->root_node );
 	if( file->root_node->sibling->kind != error_node ){
 		report_error( file, file->root_node->sibling, error_level, "Temp: must have only 'start' procedure in global scope" );

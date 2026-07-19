@@ -1,4 +1,4 @@
-start procedure[ argument @@u8 : u8 ]
+start procedure[ argument @@i8 : i64 ]
 {
 	!return[ 173 ];
 }
