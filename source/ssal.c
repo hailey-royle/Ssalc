@@ -3,7 +3,6 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <sys/stat.h>
 
 #define i8 int8_t
 #define i16 int16_t

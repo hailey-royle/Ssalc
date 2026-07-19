@@ -11,31 +11,29 @@ bool string_from_file( struct string* source, char* filename ){
 	assert( source != NULL, "Malformed args" );
 	assert( source->cap == 0 && source->len == 0 && source->data == NULL, "String must be empty" );
 	assert( filename != NULL, "Malformed args" );
-	struct stat stat_buffer = { 0 };
-	i32 stat_err = stat( filename, &stat_buffer );
-	if( stat_err == -1 ){
-		char* tmp = malloc( 1 );
-		assert( tmp != NULL, "Alloc failed." );
-		source->data = tmp;
-		source->cap = 1;
-		source->len = 0;
-		source->data[ source->len ] = '\0';
-	} else {
-		if( !S_ISREG( stat_buffer.st_mode )){
-			return true;
-		}
-		FILE* file = fopen( filename, "r" );
-		assert( file != NULL, "fopen failed" );
-		char* tmp = malloc( stat_buffer.st_size + 1 );
-		assert( tmp != NULL, "Alloc failed." );
-		source->data = tmp;
-		i64 fread_res = (i64) fread( source->data, 1, stat_buffer.st_size, file );
-		assert( stat_buffer.st_size == fread_res, "fread failed" );
-		fclose( file );
-		source->cap = stat_buffer.st_size + 1;
-		source->len = stat_buffer.st_size ;
-		source->data[ source->len ] = '\0';
-	}
+	FILE* file = fopen( filename, "r" );
+	if( file == NULL ){
+		return true;
+	};
+	assert( file != NULL, "fopen failed" );
+	i32 error = fseek( file, 0, SEEK_END );
+	if( error != 0 ){
+		return true;
+	};
+	i32 file_length = ftell( file );
+	rewind( file );
+	source->data = malloc( file_length + 1 );
+	if( source->data == NULL ){
+		return true;
+	};
+	i64 bytes_read = (i64) fread( source->data, 1, file_length, file );
+	if( file_length != bytes_read ){
+		return true;
+	};
+	fclose( file );
+	source->cap = file_length + 1;
+	source->len = file_length;
+	source->data[ source->len ] = '\0';
 	return false;
 }
 
@@ -43,15 +41,14 @@ bool string_to_file( struct string* source, char* filename ){
 	assert( source != NULL, "Malformed args" );
 	assert( source->cap > source->len || source->len <= 0, "Malformed internal source data" );
 	assert( filename != NULL, "Malformed args" );
-	struct stat stat_buffer = { 0 };
-	i32 stat_err = stat( filename, &stat_buffer );
-	if( stat_err != -1 && !S_ISREG( stat_buffer.st_mode )){
+	FILE* file = fopen( filename, "w" );
+	if( file == NULL ){
 		return true;
 	}
-	FILE* file = fopen( filename, "w" );
-	assert( file != NULL, "fopen failed" );
-	i64 fwrite_res = (i64) fwrite( source->data, 1, source->len, file );
-	assert( source->len == fwrite_res, "fwrite failed" );
+	i64 bytes_wrote = (i64) fwrite( source->data, 1, source->len, file );
+	if( source->len != bytes_wrote ){
+		return true;
+	}
 	fclose( file );
 	return false;
 }
