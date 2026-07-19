@@ -5,11 +5,14 @@
 
 **Replace all instanced of type below with the type of the array.**
 
+  // Assumes this i32 is defined to int32_t, different types can be used if desired.
+#define i32 int32_t
+
   // Recomended to put this struct elsewhere in the program, else it must be above its corresponding functions.
 struct type_array {
 	type* data;
-	int32_t count;
-	int32_t allocated;
+	i32 count;
+	i32 allocated;
 };
 
   // Must be after all array struct definitions.
@@ -22,7 +25,7 @@ struct ast_node* ast_node_array_new( struct ast_node_array* array ){
         assert( array->allocated >= 0, "Malformed data." );
         assert( array->count <= array->allocated, "Malformed data." );
         if( array->count == array->allocated ){
-                int32_t new_allocated = ( array->allocated == 0 ) ? 256 : array->allocated * 2;
+                i32 new_allocated = ( array->allocated == 0 ) ? 256 : array->allocated * 2;
                 array->data = realloc( array->data, sizeof( array->data[ 0 ]) * new_allocated );
                 assert( array->data != NULL, "alloc failed." );
                 memset( &array->data[ array->allocated ], 0, sizeof( array->data[ 0 ] ) * ( new_allocated - array->allocated ));
@@ -40,7 +43,7 @@ struct ast_node* ast_node_array_new( struct ast_node_array* array ){
         assert( array->allocated >= 0, "Malformed data." );
         assert( array->count <= array->allocated, "Malformed data." );
         if( array->count == array->allocated ){
-                int32_t new_allocated = ( array->allocated == 0 ) ? 256 : array->allocated * 2;
+                i32 new_allocated = ( array->allocated == 0 ) ? 256 : array->allocated * 2;
                 array->data = realloc( array->data, sizeof( array->data[ 0 ]) * new_allocated );
                 assert( array->data != NULL, "alloc failed." );
                 memset( &array->data[ array->allocated ], 0, sizeof( array->data[ 0 ] ) * ( new_allocated - array->allocated ));
@@ -56,7 +59,7 @@ struct ast_node** ast_node_pointer_array_new( struct ast_node_pointer_array* arr
         assert( array->allocated >= 0, "Malformed data." );
         assert( array->count <= array->allocated, "Malformed data." );
         if( array->count == array->allocated ){
-                int32_t new_allocated = ( array->allocated == 0 ) ? 256 : array->allocated * 2;
+                i32 new_allocated = ( array->allocated == 0 ) ? 256 : array->allocated * 2;
                 array->data = realloc( array->data, sizeof( array->data[ 0 ]) * new_allocated );
                 assert( array->data != NULL, "alloc failed." );
                 memset( &array->data[ array->allocated ], 0, sizeof( array->data[ 0 ] ) * ( new_allocated - array->allocated ));

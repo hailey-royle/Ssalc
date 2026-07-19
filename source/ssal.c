@@ -5,6 +5,11 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 
+#define i8 int8_t
+#define i16 int16_t
+#define i32 int32_t
+#define i64 int64_t
+
 #include "assert.h"
 #include "string.h"
 #include "tui.h"
@@ -29,22 +34,22 @@ struct ast_node {
 	struct ast_node* child;
 	struct ast_node* sibling;
 	char* raw;
-	uint32_t raw_length;
-	uint32_t line;
-	uint32_t column;
+	i32 raw_length;
+	i32 line;
+	i32 column;
 	enum ast_node_kind kind;
 };
 
 struct ast_node_array {
 	struct ast_node* data;
-	int32_t count;
-	int32_t allocated;
+	i32 count;
+	i32 allocated;
 };
 
 struct ast_node_pointer_array {
 	struct ast_node** data;
-	int32_t count;
-	int32_t allocated;
+	i32 count;
+	i32 allocated;
 };
 
 struct procedure_internal {
@@ -58,9 +63,9 @@ struct source_file {
 	struct string output;
 	struct ast_node* root_node;
 	char* name;
-	uint32_t index;
-	uint32_t line;
-	uint32_t column;
+	i32 index;
+	i32 line;
+	i32 column;
 };
 
 enum compiler_error_level {
@@ -72,7 +77,7 @@ enum compiler_error_level {
 
 #include "array.h"
 
-void print_ast_node( struct ast_node* node, int depth ){
+void print_ast_node( struct ast_node* node, i32 depth ){
 	assert( node != NULL, "Malformed argument." );
 	printf( "%*c%.*s\n", depth, ' ', node->raw_length, node->raw );
 	if( node->child != NULL ){
@@ -90,8 +95,8 @@ void print_ast( struct source_file* file ){
 	print_ast_node( file->root_node, 1 );
 }
 
-int line_display_length( char* line, int bytes ){
-	int length = 0;
+i32 line_display_length( char* line, i32 bytes ){
+	i32 length = 0;
 	for( ; bytes > 0 && *line != '\n' && *line != '\r' && *line != '\0'; line++ ){
 		if( *line == '\t' ){
 			length += 8;
@@ -105,8 +110,8 @@ int line_display_length( char* line, int bytes ){
 	return length;
 }
 
-int line_length( char* line ){
-	int i = 0;
+i32 line_length( char* line ){
+	i32 i = 0;
 	for( ; *line != '\n' && *line != '\r' && *line != '\0'; line += 1 ){
 		i += 1;
 	}
@@ -115,8 +120,8 @@ int line_length( char* line ){
 
 void report_error( struct source_file* file, struct ast_node* node, enum compiler_error_level level, char* message ){
 	char* start = node->raw - node->column + 1;
-	int length = line_display_length( start, node->column );
-	int bytes = line_length( start );
+	i32 length = line_display_length( start, node->column );
+	i32 bytes = line_length( start );
 	if( level == compiler_level ){
 		printf( "%s%sCompiler%s ", ansi_bold_start, ansi_foreground_magenta, ansi_foreground_default );
 	} else if( level == error_level){
@@ -153,8 +158,8 @@ bool char_is_integer( char c ){
 	return ( c >= '0' && c <= '9' ) || c == '_';
 }
 
-bool char_array_equal( char* a, char* b, int n ){
-	for( int i = 0; i < n; i++ ){
+bool char_array_equal( char* a, char* b, i32 n ){
+	for( i32 i = 0; i < n; i++ ){
 		if( a[ i ] == 0 || b[ i ] == 0 || a[ i ] != b[ i ] ){
 			return false;
 		}
@@ -441,8 +446,8 @@ void validate_type_match( struct source_file* file, struct procedure_internal* p
 	}
 	if( match_node->kind == literal_integer_node ){
 	} else if( match_node->kind == identifier_node ){
-		for( int i = 0; i < procedure->local_register.count; i++ ){
-			for( uint32_t j = 0; j <= match_node->raw_length; j++ ){
+		for( i32 i = 0; i < procedure->local_register.count; i++ ){
+			for( i32 j = 0; j <= match_node->raw_length; j++ ){
 				if( j == match_node->raw_length ){
 					return;
 				}
@@ -705,7 +710,7 @@ void write_output_file( struct source_file* file ){
 	}
 }
 
-int main( int argc, char* argv[] ){
+i32 main( i32 argc, char* argv[] ){
 	if( argc != 2 ){
 		printf( "Usage: ssalc file\n" );
 		exit( 0 );
