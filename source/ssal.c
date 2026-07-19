@@ -375,6 +375,28 @@ struct ast_node* parse_register( struct source_file* file ){
 	return local_root_node;
 }
 
+struct ast_node* parse_procedure_call( struct source_file* file ){
+	assert( file != NULL, "Malformed argument." );
+	struct ast_node* local_root_node = next_node( file );
+	struct ast_node* node = local_root_node;
+	if( node->kind != argument_open_node ){
+		report_error( file, node, error_level, "Expected '[' to start procedure call argument list." );
+	}
+	node->sibling = parse_expression( file );
+	node = node->sibling;
+	node->sibling = next_node( file );
+	node = node->sibling;
+	if( node->kind != argument_close_node ){
+		report_error( file, node, error_level, "Expected ']' to end procedure call argument list." );
+	}
+	node->sibling = next_node( file );
+	node = node->sibling;
+	if( node->kind != statment_end_node ){
+		report_error( file, node, error_level, "Expected ';' at the end of a statment." );
+	}
+	return local_root_node;
+}
+
 struct ast_node* parse_procedure_body( struct source_file* file ){
 	assert( file != NULL, "Malformed argument." );
 	assert( file->source.data != NULL, "Malformed argument." );
@@ -387,7 +409,11 @@ struct ast_node* parse_procedure_body( struct source_file* file ){
 	node = node->sibling;
 	while( 1 ){
 		if( node->kind == identifier_node ){
-			node->child = parse_register( file );
+			if( char_array_equal( node->raw, "exit_syscall", 12 )){
+				node->child = parse_procedure_call( file );
+			} else {
+				node->child = parse_register( file );
+			}
 		} else if( node->kind == jump_node ){
 			node->child = parse_jump( file );
 			node->sibling = next_node( file );
@@ -466,6 +492,26 @@ void validate_type_match( struct source_file* file, struct procedure_internal* p
 	}
 }
 
+void validate_expression( struct source_file* file, struct procedure_internal* procedure, struct ast_node* local_root_node ){
+	assert( file != NULL, "Malformed argument." );
+	assert( procedure != NULL, "Malformed argument." );
+	assert( local_root_node != NULL, "Malformed argument." );
+	struct ast_node* node = local_root_node;
+	if( node->kind == literal_integer_node ){
+	} else if( node->kind == identifier_node ){
+	} else {
+		report_error( file, node, error_level, "Expression does not match type." );
+	}
+}
+
+void validate_procedure_call( struct source_file* file, struct procedure_internal* procedure, struct ast_node* local_root_node ){
+	assert( file != NULL, "Malformed argument." );
+	assert( procedure != NULL, "Malformed argument." );
+	assert( local_root_node != NULL, "Malformed argument." );
+	struct ast_node* node = local_root_node->child->sibling;
+	validate_expression( file, procedure, node );
+}
+
 void validate_register( struct source_file* file, struct procedure_internal* procedure, struct ast_node* local_root_node ){
 	assert( file != NULL, "Malformed argument." );
 	assert( procedure != NULL, "Malformed argument." );
@@ -496,8 +542,12 @@ void validate_procedure_body( struct source_file* file, struct procedure_interna
 	struct ast_node* node = local_root_node->child->sibling->sibling;
 	while( 1 ){
 		if( node->kind == identifier_node ){
-			add_register( &procedure->local_register, node );
-			validate_register( file, procedure, node );
+			if( char_array_equal( node->raw, "exit_syscall", 12 )){
+				validate_procedure_call( file, procedure, node );
+			} else {
+				add_register( &procedure->local_register, node );
+				validate_register( file, procedure, node );
+			}
 		} else if( node->kind == jump_node ){
 			validate_jump( file, procedure, node );
 			break;
@@ -632,19 +682,25 @@ void output_procedure_body( struct source_file* file, struct ast_node* procedure
 	struct ast_node* node = procedure_root_node->child->sibling->sibling;
 	while( 1 ){
 		if( node->kind == identifier_node ){
-			struct ast_node* register_node = node;
-			string_append( &file->output, "\t%", 2 );
-			string_append( &file->output, register_node->raw, register_node->raw_length );
-			string_append( &file->output, " = add ", 7 );
-			register_node = register_node->child;
-			output_type( file, register_node );
-			register_node = register_node->sibling->sibling;
-			if( register_node->kind == identifier_node ){
-				string_append( &file->output, "%", 1 );
+			if( char_array_equal( node->raw, "exit_syscall", 12 )){
+				string_append( &file->output, "\tcall void @exit_syscall( i64 ", 30 );
+				string_append( &file->output, node->child->sibling->raw, node->child->sibling->raw_length );
+				string_append( &file->output, " )\n", 3 );
+			} else {
+				struct ast_node* register_node = node;
+				string_append( &file->output, "\t%", 2 );
+				string_append( &file->output, register_node->raw, register_node->raw_length );
+				string_append( &file->output, " = add ", 7 );
+				register_node = register_node->child;
+				output_type( file, register_node );
+				register_node = register_node->sibling->sibling;
+				if( register_node->kind == identifier_node ){
+					string_append( &file->output, "%", 1 );
+				}
+				string_append( &file->output, register_node->raw, register_node->raw_length );
+				string_append( &file->output, ", 0", 3 );
+				string_append( &file->output, "\n", 1 );
 			}
-			string_append( &file->output, register_node->raw, register_node->raw_length );
-			string_append( &file->output, ", 0", 3 );
-			string_append( &file->output, "\n", 1 );
 		} else if( node->kind == jump_node ){
 			struct ast_node* jump_call_node = node->child;
 			if( !char_array_equal( jump_call_node->raw, "return", 6 )){
@@ -701,7 +757,7 @@ void output_procedure( struct source_file* file, struct ast_node* procedure_root
 void output_file( struct source_file* file ){
 	assert( file != NULL, "Malformed argument." );
 	assert( file->root_node != NULL, "Malformed argument." );
-	char llvmir_start[] = "target triple = \"x86_64-unknown-linux-gnu\"\n\n";
+	char llvmir_start[] = "target triple = \"x86_64-unknown-linux-gnu\"\n\ndeclare void @exit_syscall( i64 )\ndeclare i64 @write_syscall( i64, ptr, i64 )\n\n";
 	string_append( &file->output, llvmir_start, sizeof( llvmir_start ) - 1 );
 	output_procedure( file, file->root_node );
 	if( file->root_node->sibling->kind != error_node ){

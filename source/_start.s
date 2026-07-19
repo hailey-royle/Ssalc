@@ -29,13 +29,17 @@ _start_argument_count_found_end:
 	jmp _start_argument_loop
 _start_call_ssal:      // final prep for ssal entry
 	mov rsp, rdi
-	call start     // fallthrough to exit
+	call start
+	mov rdi, rax   // exit with !return code
+	mov rax, 60
+	syscall
+	jmp exit_syscall
 
 .global exit_syscall
 exit_syscall:
-	mov rdi, rax
 	mov rax, 60
 	syscall
+	jmp exit_syscall
 
 .global write_syscall
 write_syscall:
