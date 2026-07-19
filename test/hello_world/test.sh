@@ -1,29 +1,35 @@
 #!/bin/bash
 
+output () {
+	if [ "$1" == "passed" ]; then
+		printf "%-*s [\e[32m %s \e[0m]\n" 24 "${PWD##*/}" "$1"
+		rm out.txt test.ll test &>/dev/null
+	else
+		printf "%-*s [\e[31m %s \e[0m]\n" 24 "${PWD##*/}" "$1"
+	fi
+	exit
+}
+
 # clean directory
 rm out.txt test.ll test &>/dev/null
 
 # compile test.sl to test.ll, redirect any errors to out.txt.
 ../../ssalc test.sl &>out.txt
 if [ $? != 0 ]; then
-	echo -e "${PWD##*/} \t[\e[31m ssalc failed \e[0m]"
-	exit
+	output "ssalc failed"
 fi
 
 # compile test.ll to test with normal flags, redirect any errors to out.txt.
 clang test.ll ../../_start.o -nostdlib -static -o test &>out.txt
-if [ $? !=  0 ]; then
-	echo -e "${PWD##*/} \t[\e[31m clang failed \e[0m]"
-	exit
+if [ $? != 0 ]; then
+	output "clang failed"
 fi
 
 # run the test
 ./test >>test.txt
-if [[ "$(< test.txt)" == "Hello World!" ]]; then
-	echo -e "${PWD##*/} \t[\e[32m passed \e[0m]"
+if [ "$(< test.txt)" == "Hello World!" ]; then
+	output "passed"
 else
-	echo -e "${PWD##*/} \t[\e[31m executable failed \e[0m]"
+	output "executable failed"
 fi
 
-# clean directory
-rm out.txt test.ll test &>/dev/null
