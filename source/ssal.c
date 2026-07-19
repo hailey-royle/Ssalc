@@ -8,7 +8,6 @@
 #include "assert.h"
 #include "string.h"
 #include "tui.h"
-#include "array.h"
 
 enum ast_node_kind {
 	error_node = 0,
@@ -38,17 +37,15 @@ struct ast_node {
 
 struct ast_node_array {
 	struct ast_node* data;
-	uint32_t count;
-	uint32_t allocated;
+	int32_t count;
+	int32_t allocated;
 };
-#define ast_node_array_new( name ) array_new( (struct array*) name, sizeof( struct ast_node ));
 
 struct ast_node_pointer_array {
 	struct ast_node** data;
-	uint32_t count;
-	uint32_t allocated;
+	int32_t count;
+	int32_t allocated;
 };
-#define ast_node_pointer_array_new( name ) array_new( (struct array*) name, sizeof( struct ast_node* ));
 
 struct procedure_internal {
 	struct ast_node* return_node;
@@ -72,6 +69,8 @@ enum compiler_error_level {
 	warning_level,
 	note_level,
 };
+
+#include "array.h"
 
 void print_ast_node( struct ast_node* node, int depth ){
 	assert( node != NULL, "Malformed argument." );
@@ -167,7 +166,7 @@ struct ast_node* next_node( struct source_file* file ){
 	assert( file != NULL, "Malformed argument." );
 	assert( file->source.data != NULL, "Malformed argument." );
 	assert( file->index < file->source.len, "Source file overflow." );
-	struct ast_node* node = ast_node_array_new( file );
+	struct ast_node* node = ast_node_array_new( &file->raw_node );
 	while( char_is_space( file->source.data[ file->index ])){
 		if( '\n' == file->source.data[ file->index ]){
 			file->column = 1;
@@ -442,7 +441,7 @@ void validate_type_match( struct source_file* file, struct procedure_internal* p
 	}
 	if( match_node->kind == literal_integer_node ){
 	} else if( match_node->kind == identifier_node ){
-		for( uint32_t i = 0; i < procedure->local_register.count; i++ ){
+		for( int i = 0; i < procedure->local_register.count; i++ ){
 			for( uint32_t j = 0; j <= match_node->raw_length; j++ ){
 				if( j == match_node->raw_length ){
 					return;
