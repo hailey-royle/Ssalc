@@ -16,12 +16,14 @@ enum ast_node_kind {
 	error_node = 0,
 	identifier_node,
 	literal_integer_node,
+	literal_string_node,
 	procedure_node,
 	argument_open_node,
 	argument_close_node,
 	scope_open_node,
 	scope_close_node,
 	statment_end_node,
+	argument_separator_node,
 	assignment_node,
 	result_node,
 	array_node,
@@ -203,6 +205,21 @@ struct ast_node* next_node( struct source_file* file ){
 			node->raw_length += 1;
 		} while( char_is_integer( file->source.data[ file->index ]));
 		node->kind = literal_integer_node;
+	} else if( '"' == file->source.data[ file->index ]){
+		do{
+			if( '\n' == file->source.data[ file->index ]){
+				file->column = 1;
+				file->line += 1;
+			} else {
+				file->column += 1;
+			}
+			file->index += 1;
+			node->raw_length += 1;
+		} while( '"' != file->source.data[ file->index ]);
+		file->column += 1;
+		file->index += 1;
+		node->raw_length += 1;
+		node->kind = literal_string_node;
 	} else if( '[' == file->source.data[ file->index ]){
 		file->column += 1;
 		file->index += 1;
@@ -228,6 +245,11 @@ struct ast_node* next_node( struct source_file* file ){
 		file->index += 1;
 		node->raw_length += 1;
 		node->kind = statment_end_node;
+	} else if( ',' == file->source.data[ file->index ]){
+		file->column += 1;
+		file->index += 1;
+		node->raw_length += 1;
+		node->kind = argument_separator_node;
 	} else if( '=' == file->source.data[ file->index ]){
 		file->column += 1;
 		file->index += 1;
@@ -249,7 +271,7 @@ struct ast_node* next_node( struct source_file* file ){
 		node->raw_length += 1;
 		node->kind = jump_node;
 	} else {
-		report_error( file, node, error_level, "Invalid syntax." );
+		report_error( file, node, error_level, "Unable to parse syntax." );
 	}
 	return node;
 }
