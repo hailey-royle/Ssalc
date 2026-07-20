@@ -353,16 +353,47 @@ struct ast_node* parse_start_procedure_declaration_arguments( struct source_file
 	return local_root_node;
 }
 
-struct ast_node* parse_expression( struct source_file* file ){
+struct ast_node* parse_expression( struct source_file* file, struct ast_node** post_node ){
 	assert( file != NULL, "Malformed argument." );
+	assert( post_node != NULL, "Malformed argument." );
+	assert( *post_node == NULL, "Malformed argument." );
 	assert( file->source.data != NULL, "Malformed argument." );
-	struct ast_node* node = next_node( file );
+	struct ast_node* local_root_node = next_node( file );
+	struct ast_node* node = local_root_node;
 	if( node->kind == literal_integer_node ){
+	} else if( node->kind == literal_string_node  ){
 	} else if( node->kind == identifier_node ){
 	} else {
-		report_error( file, node, error_level, "Expected expression after '['." );
+		report_error( file, node, error_level, "Expected expression." );
 	}
-	return node;
+	node->child = next_node( file );
+	if( node->child->kind == argument_separator_node ){
+		*post_node = node->child;
+	} else if( node->child->kind == statment_end_node ){
+		*post_node = node->child;
+	} else if( node->child->kind == argument_close_node ){
+		*post_node = node->child;
+	} else if( node->child->kind == argument_open_node ){
+		struct ast_node* call_post_node = NULL;
+		while( 1 ){
+			node = node->child;
+			node->child = parse_expression( file, &call_post_node );
+			if( call_post_node->kind == argument_close_node ){
+				node->child = next_node( file );
+				break;
+			} else if( call_post_node->kind == argument_separator_node ){
+				call_post_node = NULL;
+				continue;
+			} else {
+				report_error( file, call_post_node, error_level, "Expected expression list." );
+			}
+		}
+		*post_node = call_post_node;
+	} else {
+		report_error( file, node->child, error_level, "Expected expression end." );
+	}
+	assert( *post_node != NULL, "Unset pointer should be set" );
+	return local_root_node;
 }
 
 struct ast_node* parse_jump( struct source_file* file ){
@@ -378,13 +409,14 @@ struct ast_node* parse_jump( struct source_file* file ){
 	if( node->kind != argument_open_node ){
 		report_error( file, node, error_level, "Expected '[' after jump name." );
 	}
-	node->sibling = parse_expression( file );
+	struct ast_node* post_node = NULL;
+	node->sibling = parse_expression( file, &post_node );
 	node = node->sibling;
-	node->sibling = next_node( file );
-	node = node->sibling;
-	if( node->kind != argument_close_node ){
-		report_error( file, node, error_level, "Expected ']' after jump argumnets." );
+	if( post_node->kind != argument_close_node ){
+		report_error( file, post_node, error_level, "Expected ']' after jump argumnets." );
 	}
+	node->sibling = post_node;
+	node = node->sibling;
 	node->sibling = next_node( file );
 	node = node->sibling;
 	if( node->kind != statment_end_node ){
@@ -402,13 +434,13 @@ struct ast_node* parse_register( struct source_file* file ){
 	if( node->kind != assignment_node ){
 		report_error( file, node, error_level, "Expected '=' after register type." );
 	}
-	node->sibling = parse_expression( file );
+	struct ast_node* post_node = NULL;
+	node->sibling = parse_expression( file, &post_node );
 	node = node->sibling;
-	node->sibling = next_node( file );
-	node = node->sibling;
-	if( node->kind != statment_end_node ){
-		report_error( file, node, error_level, "Expected ';' at the end of a statment." );
+	if( post_node->kind != statment_end_node ){
+		report_error( file, post_node, error_level, "Expected ';' at the end of a statment." );
 	}
+	node->sibling = post_node;
 	return local_root_node;
 }
 
@@ -419,12 +451,18 @@ struct ast_node* parse_procedure_call( struct source_file* file ){
 	if( node->kind != argument_open_node ){
 		report_error( file, node, error_level, "Expected '[' to start procedure call argument list." );
 	}
-	node->sibling = parse_expression( file );
-	node = node->sibling;
-	node->sibling = next_node( file );
-	node = node->sibling;
-	if( node->kind != argument_close_node ){
-		report_error( file, node, error_level, "Expected ']' to end procedure call argument list." );
+	while( 1 ){
+		struct ast_node* post_node = NULL;
+		node->sibling = parse_expression( file, &post_node );
+		node = node->sibling;
+		if( post_node->kind == argument_separator_node ){
+		} else if( post_node->kind == argument_close_node ){
+			node->sibling = post_node;
+			node = node->sibling;
+			break;
+		} else {
+			report_error( file, node, error_level, "Expected ',' or ']' after procedure call argument." );
+		}
 	}
 	node->sibling = next_node( file );
 	node = node->sibling;
