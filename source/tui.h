@@ -19,6 +19,8 @@
 #define ansi_reset_graphics "\x1b[0m"
 #define ansi_bold_start "\x1b[1m"
 #define ansi_bold_end "\x1b[22m"
+#define ansi_underline_start "\x1b[4m"
+#define ansi_underline_end "\x1b[24m"
 #define ansi_inverse_start "\x1b[7m"
 #define ansi_inverse_end "\x1b[27m"
 
