@@ -112,29 +112,36 @@ By convention, '_' as the first digit is reserved for internal library use.
 
 ## Operators and Punctuation
 
-`:`  - result
-`=`  - assignment
-`#`  - execute at compilation
-`!`  - jump call
-`,`  - list seperator
-`;`  - statement end
-`(`  - expression start
-`)`  - expression end
-`[`  - argument open
-`]`  - argument close
-`{`  - scope start
-`}`  - scope end
 `\{` - comment start
 `}\` - comment end
+`[`  - argument open
+`]`  - argument close
+`(`  - expression start
+`)`  - expression end
+`{`  - scope start
+`}`  - scope end
+`,`  - list seperator
+`;`  - statement end
+`:`  - result
+`!`  - jump call
+`=`  - assignment
+`#`  - execute at compilation
 `"`  - string start / string end
 `'`  - code start / code end
-`\`  - escape in string
+
+`.`  - composite member operator
+`^`  - pointer type / refrence operator / derefrence operator
+`@`  - array type / index operator
+`?`  - conditional
+`$`  - selection
 
 `+`  - addition operator
 `-`  - subtraction / negation operator
 `*`  - multiplication operator
 `/`  - divistion operator
 `%`  - modulo operator
+`<<` - shift left operator
+`>>` - shift right operator
 `~`  - bitwise not operator
 `&`  - bitwise and operator
 `|`  - bitwise or operator
@@ -149,12 +156,6 @@ By convention, '_' as the first digit is reserved for internal library use.
 `<=` - less then or equals operator
 `>=` - greator then or equals operator
 `<>` - less or greator then operator
-`?`  - conditional operator
-`$`  - selection operator
-
-`.`  - composite member operator
-`@`  - array type / index operator
-`^`  - pointer type / refrence operator / derefrence operator
 
 
 ## Procedure
