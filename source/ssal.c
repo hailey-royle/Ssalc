@@ -160,11 +160,9 @@ void print_ast_node( struct ast_node* node, i32 depth ){
         }
 }
 
-void print_ast( struct ast_node* root ){
-        assert( root != NULL, "Malformed argument." );
+void print_ast(){
 	printf( "=== Ast Start ===\n" );
-        print_ast_node( root, 1 );
-	printf( "\n" );
+        print_ast_node( &root_node, 1 );
 	printf( "==== Ast End ====\n" );
 }
 
@@ -196,7 +194,7 @@ void compiler_error( struct source_file* file, struct ast_node* problem, enum co
 		bytes_after_problem, start + problem->column + problem->length
 	);
 #ifdef DEBUG
-	print_ast( &root_node );
+	print_ast();
 #endif
 	exit( 1 );
 }
@@ -581,7 +579,7 @@ i32 main( i32 argc, char* argv[] ){
 	root_node .length = strlen( argv[ 1 ]),
 	root_node .kind = file_node,
 	parse_file( &root_node );
-	print_ast( &root_node );
+	print_ast();
 //	validate_globals( root_node );
 //	output( root_node );
 	return 0;
