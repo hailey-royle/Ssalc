@@ -40,6 +40,12 @@ struct ast_node {
 	enum ast_node_kind kind;
 };
 
+struct source_file {
+	struct ast_node* root;
+	struct string source;
+	i32 index;
+};
+
 enum compiler_error_level {
 	halt_level,
 	error_level,
@@ -47,16 +53,7 @@ enum compiler_error_level {
 	note_level,
 };
 
-void COMMON_Print(char *format, ...)
-{
-    va_list args;
-
-    va_start(args, format);
-    vprintf(format, args);
-    va_end(args);
-}
-
-void compiler_error( struct ast_node* file, struct ast_node* problem, enum compiler_error_level level, char* format, ... ){
+void compiler_error( struct source_file* file, struct ast_node* problem, enum compiler_error_level level, char* format, ... ){
 	char* start = problem->raw - problem->column;
 	i32 bytes_after_problem = 0;
 	while( problem->raw[ bytes_after_problem ] != '\n' && problem->raw[ bytes_after_problem ] != '\r' && problem->raw[ bytes_after_problem ] != '\0' ){
@@ -82,7 +79,7 @@ void compiler_error( struct ast_node* file, struct ast_node* problem, enum compi
 		exit( 1 );
 	}
 	printf( "%s\n %*s | %d | %*s%s%*s%s%*s\n",
-		ansi_bold_end, file->length, file->raw, problem->line,
+		ansi_bold_end, file->root->length, file->root->raw, problem->line,
 		problem->column, start, ansi_underline_start,
 	        problem->length, start + problem->column, ansi_underline_end,
 		bytes_after_problem, start + problem->column + problem->length
@@ -96,12 +93,19 @@ void parse_file( struct ast_node* root_node ){
 	assert( root_node->raw != NULL, "Malformed argument data." );
 	assert( root_node->length > 0, "Malformed argument data." );
 	assert( root_node->kind == file_node, "Malformed argument data." );
-	struct string source = { 0 };
-	bool error = string_from_file( &source, root_node->raw );
+	struct source_file file = {
+		.root = root_node,
+		.source = { 0 },
+		.index = 0,
+	};
+	bool error = string_from_file( &file.source, file.root->raw );
 	if( error ){
-		compiler_error( root_node, root_node, halt_level, "Unable to open file \"%s\"", root_node->raw );
+		compiler_error( &file, file.root, halt_level, "Unable to open file \"%s\"", root_node->raw );
 	}
-		compiler_error( root_node, root_node, halt_level, "Unable to open file \"%s\"", root_node->raw );
+	struct raw_token token = next_token( &file );
+	while( 1 ){
+		break;
+	}
 }
 
 i32 main( i32 argc, char* argv[] ){
@@ -121,6 +125,7 @@ i32 main( i32 argc, char* argv[] ){
 	parse_file( &root_node );
 //	validate_globals( root_node );
 //	output( root_node );
+	return 0;
 }
 
 	
