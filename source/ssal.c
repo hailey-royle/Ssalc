@@ -66,6 +66,16 @@ enum raw_token_kind {
 enum ast_node_kind {
 	error_node,
 	file_node,
+	procedure_node,
+	routine_node,
+	structure_node,
+	union_node,
+	enumeration_node,
+	register_node,
+	type_node,
+	jump_node,
+	call_node,
+	// not exaustive
 };
 
 struct raw_token {
@@ -86,9 +96,16 @@ struct ast_node {
 	enum ast_node_kind kind;
 };
 
+struct ast_node_array {
+	struct ast_node* data;
+	i32 count;
+	i32 allocated;
+};
+
 struct source_file {
-	struct ast_node* root;
+	struct ast_node_array node_raw;
 	struct string source;
+	struct ast_node* root;
 	i32 index;
 	i32 line;
 	i32 column;
@@ -101,10 +118,62 @@ enum compiler_error_level {
 	note_level,
 };
 
+#include "array.h"
+
+struct ast_node root_node = { 0 };
+
+
+void print_ast_node( struct ast_node* node, i32 depth ){
+        assert( node != NULL, "Malformed argument." );
+	char* kind = NULL;
+	if ( node->kind == error_node ){
+		kind = "error";
+	} else if ( node->kind == file_node ){
+		kind = "file";
+	} else if ( node->kind == procedure_node ){
+		kind = "procedure";
+	} else if ( node->kind == routine_node ){
+		kind = "routine";
+	} else if ( node->kind == structure_node ){
+		kind = "structure";
+	} else if ( node->kind == union_node ){
+		kind = "union";
+	} else if ( node->kind == enumeration_node ){
+		kind = "enumeration";
+	} else if ( node->kind == register_node ){
+		kind = "register";
+	} else if ( node->kind == type_node ){
+		kind = "type";
+	} else if ( node->kind == jump_node ){
+		kind = "jump";
+	} else if ( node->kind == call_node ){
+		kind = "call";
+	} else {
+		assert( false, "Unknown node kind" );
+	}
+        printf( "%*c%s | %.*s\n", depth, ' ', kind, node->length, node->raw );
+        if( node->child != NULL ){
+                print_ast_node( node->child, depth + 1 );
+        }
+        if( node->sibling != NULL ){
+                print_ast_node( node->sibling, depth );
+        }
+}
+
+void print_ast( struct ast_node* root ){
+        assert( root != NULL, "Malformed argument." );
+	printf( "=== Ast Start ===\n" );
+        print_ast_node( root, 1 );
+	printf( "\n" );
+	printf( "==== Ast End ====\n" );
+}
+
 void compiler_error( struct source_file* file, struct ast_node* problem, enum compiler_error_level level, char* format, ... ){
 	char* start = problem->raw - problem->column;
 	i32 bytes_after_problem = 0;
-	while( problem->raw[ bytes_after_problem ] != '\n' && problem->raw[ bytes_after_problem ] != '\r' && problem->raw[ bytes_after_problem ] != '\0' ){
+	while(( problem->raw[ bytes_after_problem + problem->length ] != '\n' ) &&
+	      ( problem->raw[ bytes_after_problem + problem->length ] != '\r' ) &&
+	      ( problem->raw[ bytes_after_problem + problem->length ] != '\0' )){
 		bytes_after_problem += 1;
 	}
 	if(( level == halt_level ) || ( level == error_level )){
@@ -120,16 +189,15 @@ void compiler_error( struct source_file* file, struct ast_node* problem, enum co
 		vprintf( format, args );
 		va_end( args );
 	}
-	if( level == halt_level ){
-		printf( "%s\n", ansi_bold_end );
-		exit( 1 );
-	}
-	printf( "%s\n %*s | %d | %*s%s%*s%s%*s\n",
+	printf( "%s\n  %.*s | %d | %.*s%s%.*s%s%.*s\n",
 		ansi_bold_end, file->root->length, file->root->raw, problem->line,
 		problem->column, start, ansi_underline_start,
 	        problem->length, start + problem->column, ansi_underline_end,
 		bytes_after_problem, start + problem->column + problem->length
 	);
+#ifdef DEBUG
+	print_ast( &root_node );
+#endif
 	exit( 1 );
 }
 
@@ -487,8 +555,9 @@ void parse_file( struct ast_node* root_node ){
 	assert( root_node->length > 0, "Malformed argument data." );
 	assert( root_node->kind == file_node, "Malformed argument data." );
 	struct source_file file = {
-		.root = root_node,
+		.node_raw = { 0 },
 		.source = { 0 },
+		.root = root_node,
 		.index = 0,
 		.line = 1,
 		.column = 0,
@@ -508,16 +577,11 @@ i32 main( i32 argc, char* argv[] ){
 		fprintf( stderr, "Usage: ssalc file_name.sl\n" );
 		exit( 1 );
 	}
-	struct ast_node root_node = {
-		.sibling = NULL,
-		.child = NULL,
-		.raw = argv[ 1 ],
-		.length = strlen( argv[ 1 ]),
-		.line = -1,
-		.column = -1,
-		.kind = file_node,
-	};
+	root_node .raw = argv[ 1 ],
+	root_node .length = strlen( argv[ 1 ]),
+	root_node .kind = file_node,
 	parse_file( &root_node );
+	print_ast( &root_node );
 //	validate_globals( root_node );
 //	output( root_node );
 	return 0;
