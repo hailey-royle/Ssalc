@@ -289,6 +289,21 @@ bool node_is_type( struct source_file* file, struct ast_node* node ){
 	return true;
 }
 
+bool node_is_procedure( struct source_file* file, struct ast_node* node ){
+	assert( file != NULL, "Malformed argument." );
+	assert( node != NULL, "Malformed argument." );
+	assert( node->raw != NULL, "Malformed argument." );
+	if( node->kind != identifier_node ){
+		return false;
+	}
+	if( char_array_equal( node->raw, "exit_syscall", 12 )){
+	} else if( char_array_equal( node->raw, "write_syscall", 13 )){
+	} else {
+		return false;
+	}
+	return true;
+}
+
 struct ast_node* parse_type( struct source_file* file ){
 	assert( file != NULL, "Malformed argument." );
 	assert( file->source.data != NULL, "Malformed argument." );
@@ -432,6 +447,8 @@ struct ast_node* parse_procedure_body( struct source_file* file ){
 	while( 1 ){
 		if( node->kind == identifier_node ){
 			if( char_array_equal( node->raw, "exit_syscall", 12 )){
+				node->child = parse_procedure_call( file );
+			} else if( char_array_equal( node->raw, "write_syscall", 13 )){
 				node->child = parse_procedure_call( file );
 			} else {
 				node->child = parse_register( file );
@@ -698,16 +715,36 @@ void ouput_argument( struct source_file* file, struct ast_node* node ){
 	} 
 }
 
+void output_procedure_call( struct source_file* file, struct ast_node* node ){
+	assert( file != NULL, "Malformed argument." );
+	assert( node != NULL, "Malformed argument." );
+	assert( node->raw != NULL, "Malformed argument." );
+	assert( node->kind == identifier_node, "Malformed data." );
+	if( char_array_equal( node->raw, "exit_syscall", 12 )){
+		string_append( &file->output, "\tcall void @exit_syscall( i64 ", 30 );
+		string_append( &file->output, node->child->sibling->raw, node->child->sibling->raw_length );
+		string_append( &file->output, " )\n", 3 );
+	} else if( char_array_equal( node->raw, "write_syscall", 13 )){
+		string_append( &file->output, "\tcall void @write_syscall( i64 ", 31 );
+		string_append( &file->output, node->child->sibling->raw, node->child->sibling->raw_length );
+		string_append( &file->output, ", ptr ", 6 );
+		string_append( &file->output, node->child->sibling->sibling->raw, node->child->sibling->sibling->raw_length );
+		string_append( &file->output, ", i64 ", 6 );
+		string_append( &file->output, node->child->sibling->sibling->sibling->raw, node->child->sibling->sibling->sibling->raw_length );
+		string_append( &file->output, " )\n", 3 );
+	} else {
+		report_error( file, node->sibling, compiler_level, "Calling procedure that has not been declared." );
+	}
+}
+
 void output_procedure_body( struct source_file* file, struct ast_node* procedure_root_node ){
 	assert( file != NULL, "Malformed argument." );
 	assert( procedure_root_node->kind == identifier_node, "Malformed argument." );
 	struct ast_node* node = procedure_root_node->child->sibling->sibling;
 	while( 1 ){
 		if( node->kind == identifier_node ){
-			if( char_array_equal( node->raw, "exit_syscall", 12 )){
-				string_append( &file->output, "\tcall void @exit_syscall( i64 ", 30 );
-				string_append( &file->output, node->child->sibling->raw, node->child->sibling->raw_length );
-				string_append( &file->output, " )\n", 3 );
+			if( node_is_procedure( file, node )){
+				output_procedure_call( file, node );
 			} else {
 				struct ast_node* register_node = node;
 				string_append( &file->output, "\t%", 2 );
