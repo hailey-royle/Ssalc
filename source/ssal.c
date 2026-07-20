@@ -163,7 +163,7 @@ void print_ast_node( struct ast_node* node, i32 depth ){
 void print_ast(){
 	printf( "=== Ast Start ===\n" );
         print_ast_node( &root_node, 1 );
-	printf( "==== Ast End ====\n" );
+	printf( "==== Ast End ====\n\n" );
 }
 
 void compiler_error( struct source_file* file, struct ast_node* problem, enum compiler_error_level level, char* format, ... ){
@@ -187,7 +187,7 @@ void compiler_error( struct source_file* file, struct ast_node* problem, enum co
 		vprintf( format, args );
 		va_end( args );
 	}
-	printf( "%s\n  %.*s | %d | %.*s%s%.*s%s%.*s\n",
+	printf( "%s\n  %.*s | %d | %.*s%s%.*s%s%.*s\n\n",
 		ansi_bold_end, file->root->length, file->root->raw, problem->line,
 		problem->column, start, ansi_underline_start,
 	        problem->length, start + problem->column, ansi_underline_end,
@@ -579,7 +579,9 @@ i32 main( i32 argc, char* argv[] ){
 	root_node .length = strlen( argv[ 1 ]),
 	root_node .kind = file_node,
 	parse_file( &root_node );
+#ifdef DEBUG
 	print_ast();
+#endif
 //	validate_globals( root_node );
 //	output( root_node );
 	return 0;
