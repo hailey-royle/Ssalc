@@ -639,11 +639,15 @@ void parse_register( struct source_file* file, struct ast_node* local_root ){
 		compiler_error_token( file, &token, error_level, "register must be assigned a value." );
 	}
 	token = next_token( file );
-	if( token.kind != literal_number_token ){
+	if( token.kind == identifier_token ){
+		local_root->child->sibling = ast_node_array_new( &file->node_raw );
+		build_node( local_root->child->sibling, token.raw, token.length, token.line, token.column, register_node );
+	} else if( token.kind == literal_number_token ){
+		local_root->child->sibling = ast_node_array_new( &file->node_raw );
+		build_node( local_root->child->sibling, token.raw, token.length, token.line, token.column, literal_number_node );
+	} else {
 		compiler_error_token( file, &token, error_level, "register must be assigned a value." );
 	}
-	local_root->child->sibling = ast_node_array_new( &file->node_raw );
-	build_node( local_root->child->sibling, token.raw, token.length, token.line, token.column, literal_number_node );
 	token = next_token( file );
 	if( token.kind != statement_end_token ){
 		compiler_error_token( file, &token, error_level, "Statement must end with ';'" );
@@ -835,7 +839,14 @@ void output_procedure( struct string* file, struct ast_node* root ){
 			string_append( file, " = add ", 7 );
 			string_append( file, statement->child->raw, statement->child->length );
 			string_append( file, " ", 1 );
-			string_append( file, statement->child->sibling->raw, statement->child->sibling->length );
+			if( statement->child->sibling->kind == register_node ){
+				string_append( file, "%", 1 );
+				string_append( file, statement->child->sibling->raw, statement->child->sibling->length );
+			} else if ( statement->child->sibling->kind == literal_number_node ){
+				string_append( file, statement->child->sibling->raw, statement->child->sibling->length );
+			} else {
+				assert( false, "Bad statement not valid return for now." );
+			}
 			string_append( file, ", 0\n", 4 );
 		} else if( statement->kind == jump_node ){
 			assert( char_array_equal( statement->raw, "return", 6 ), "Bad statement not jump return for now." );
