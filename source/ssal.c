@@ -76,6 +76,7 @@ enum ast_node_kind {
 	type_node,
 	jump_node,
 	call_node,
+	literal_number_node,
 	// not exaustive
 };
 
@@ -151,6 +152,8 @@ void print_ast_node( struct ast_node* node, i32 depth ){
 		kind = "jump";
 	} else if ( node->kind == call_node ){
 		kind = "call";
+	} else if ( node->kind == literal_number_node ){
+		kind = "literal_number";
 	} else {
 		assert( false, "Unknown node kind" );
 	}
@@ -208,6 +211,11 @@ void compiler_error( struct source_file* file, struct ast_node* problem, enum co
 }
 
 void compiler_error_token( struct source_file* file, struct raw_token* problem, enum compiler_error_level level, char* format, ... ){
+        assert( file != NULL, "Malformed argument." );
+        assert( problem != NULL, "Malformed argument." );
+        assert( problem->raw != NULL, "Malformed argument." );
+	assert( problem->length > 0, "Malformed argument data." );
+        assert( format != NULL, "Malformed argument." );
 	struct ast_node fake = {
 		.raw = problem->raw,
 		.length = problem->length,
@@ -599,34 +607,76 @@ void parse_procedure( struct source_file* file, struct ast_node* local_root ){
 		}
 		statement->sibling = ast_node_array_new( &file->node_raw );
 		statement = statement->sibling;
-		build_node( statement, token.raw, token.length, token.line, token.column, argument_node );
+		struct ast_node* argument = statement;
+		build_node( argument, token.raw, token.length, token.line, token.column, argument_node );
 		token = next_token( file );
 		if( token.kind != array_token ){
 			compiler_error_token( file, &token, error_level, "Start procedure must have one arugment of type '@@i8'." );
 		}
-		statement->child = ast_node_array_new( &file->node_raw );
-		statement = statement->child;
-		build_node( statement, token.raw, token.length, token.line, token.column, type_node );
+		argument->child = ast_node_array_new( &file->node_raw );
+		argument = argument->child;
+		build_node( argument, token.raw, token.length, token.line, token.column, type_node );
 		token = next_token( file );
 		if( token.kind != array_token ){
 			compiler_error_token( file, &token, error_level, "Start procedure must have one arugment of type '@@i8'." );
 		}
-		statement->child = ast_node_array_new( &file->node_raw );
-		statement = statement->child;
-		build_node( statement, token.raw, token.length, token.line, token.column, type_node );
+		argument->child = ast_node_array_new( &file->node_raw );
+		argument = argument->child;
+		build_node( argument, token.raw, token.length, token.line, token.column, type_node );
 		token = next_token( file );
 		if( token.kind != identifier_token ){
 			compiler_error_token( file, &token, error_level, "Start procedure must have one arugment of type '@@i8'." );
 		}
-		statement->child = ast_node_array_new( &file->node_raw );
-		statement = statement->child;
-		build_node( statement, token.raw, token.length, token.line, token.column, type_node );
+		argument->child = ast_node_array_new( &file->node_raw );
+		argument = argument->child;
+		build_node( argument, token.raw, token.length, token.line, token.column, type_node );
+		token = next_token( file );
+		if( token.kind != argument_close_token ){
+			compiler_error_token( file, &token, error_level, "Expected ']' following procedure arguments." );
+		}
 	}
 	token = next_token( file );
-	if( token.kind != argument_close_token ){
-		compiler_error_token( file, &token, error_level, "Expected ']' following procedure arguments." );
+	if( token.kind != scope_open_token ){
+		compiler_error_token( file, &token, error_level, "Expected '{' following procedue arguments." );
 	}
-	
+	{ // jump return statement
+		token = next_token( file );
+		if( token.kind != jump_token ){
+			compiler_error_token( file, &token, error_level, "Expected jump to return." );
+		}
+		token = next_token( file );
+		if( token.kind != identifier_token ){
+			compiler_error_token( file, &token, error_level, "Can only jump to return." );
+		}
+		if( !char_array_equal( token.raw, "return", 6 )){
+			compiler_error_token( file, &token, error_level, "Can only jump to return." );
+		}
+		statement->sibling = ast_node_array_new( &file->node_raw );
+		statement = statement->sibling;
+		build_node( statement, token.raw, token.length, token.line, token.column, jump_node );
+		token = next_token( file );
+		if( token.kind != argument_open_token ){
+			compiler_error_token( file, &token, error_level, "Expected '[' after jump location." );
+		}
+		token = next_token( file );
+		if( token.kind != literal_number_token ){
+			compiler_error_token( file, &token, error_level, "Expected jump return argument." );
+		}
+		statement->child  = ast_node_array_new( &file->node_raw );
+		build_node( statement->child, token.raw, token.length, token.line, token.column, literal_number_node );
+		token = next_token( file );
+		if( token.kind != argument_close_token ){
+			compiler_error_token( file, &token, error_level, "Expected ']' after jump argument." );
+		}
+		token = next_token( file );
+		if( token.kind != statement_end_token ){
+			compiler_error_token( file, &token, error_level, "';' required at the end of every statement." );
+		}
+	}
+	token = next_token( file );
+	if( token.kind != scope_close_token ){
+		compiler_error_token( file, &token, error_level, "Expected '}' following procedure scope." );
+	}
 }
 
 void parse_file( struct ast_node* root ){
@@ -652,11 +702,10 @@ void parse_file( struct ast_node* root ){
 	struct raw_token token = { 0 };
 	while( 1 ){
 		token = next_token( &file );
-		node->raw = token.raw;
-		node->length = token.length;
-		node->line = token.line;
-		node->column = token.column;
 		if( token.kind == identifier_token ){
+			node->sibling = ast_node_array_new( &file.node_raw );
+			node = node->sibling;
+			build_node( node, token.raw, token.length, token.line, token.column, 0 );
 			token = next_token( &file );
 			if( token.kind == procedure_token ){
 				node->kind = procedure_node;
@@ -665,15 +714,13 @@ void parse_file( struct ast_node* root ){
 				}
 				parse_procedure( &file, node );
 			} else {
-				compiler_error( &file, node, error_level, "Compiler only supports procedures in global scope." );
+				compiler_error_token( &file, &token, error_level, "Compiler only supports procedures in global scope." );
 			}
-		} else if( token.kind == error_token && file.index >= file.source.length ){
+		} else if( file.index >= file.source.length ){
 			break;
 		} else {
-			compiler_error( &file, node, error_level, "Expected global declaration." );
+			compiler_error_token( &file, &token, error_level, "Expected global declaration." );
 		}
-		node->sibling = ast_node_array_new( &file.node_raw );
-		node = node->sibling;
 	}
 }
 
