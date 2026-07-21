@@ -699,13 +699,10 @@ void parse_file( struct ast_node* root ){
 	}
 	root->child = ast_node_array_new( &file.node_raw );
 	struct ast_node* node = root->child;
-	struct raw_token token = { 0 };
+	struct raw_token token = next_token( &file );
+	build_node( node, token.raw, token.length, token.line, token.column, 0 );
 	while( 1 ){
-		token = next_token( &file );
 		if( token.kind == identifier_token ){
-			node->sibling = ast_node_array_new( &file.node_raw );
-			node = node->sibling;
-			build_node( node, token.raw, token.length, token.line, token.column, 0 );
 			token = next_token( &file );
 			if( token.kind == procedure_token ){
 				node->kind = procedure_node;
@@ -716,11 +713,14 @@ void parse_file( struct ast_node* root ){
 			} else {
 				compiler_error_token( &file, &token, error_level, "Compiler only supports procedures in global scope." );
 			}
-		} else if( file.index >= file.source.length ){
-			break;
 		} else {
 			compiler_error_token( &file, &token, error_level, "Expected global declaration." );
 		}
+		token = next_token( &file );
+		if( file.index >= file.source.length ){
+			break;
+		}
+		compiler_error_token( &file, &token, error_level, "Compiler only supports start procedure in global scope." );
 	}
 }
 
@@ -736,7 +736,7 @@ i32 main( i32 argc, char* argv[] ){
 #ifdef DEBUG
 	print_ast();
 #endif
-//	validate_globals( root_node );
+//	validate_globals( &root_node );
 //	output( root_node );
 	return 0;
 }
