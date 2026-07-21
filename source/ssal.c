@@ -200,8 +200,8 @@ void compiler_error( struct source_file* file, struct ast_node* problem, enum co
 	}
 	printf( "%s\n  %.*s | %d | %.*s%s%.*s%s%.*s\n\n",
 		ansi_bold_end, file->root->length, file->root->raw, problem->line,
-		problem->column, start, ansi_underline_start,
-	        problem->length, start + problem->column, ansi_underline_end,
+		problem->column, start, ansi_underline_start ansi_foreground_red,
+	        problem->length, start + problem->column, ansi_reset_graphics,
 		bytes_after_problem, start + problem->column + problem->length
 	);
 #ifdef DEBUG
@@ -597,7 +597,7 @@ void parse_procedure( struct source_file* file, struct ast_node* local_root ){
 		build_node( statement, token.raw, token.length, token.line, token.column, type_node );
 		token = next_token( file );
 		if( token.kind != result_token ){
-			compiler_error_token( file, &token, error_level, "Expected type or ':' to start procedure arguments." );
+			compiler_error_token( file, &token, error_level, "Expected ':' after return type in procedure arguments." );
 		}
 	}
 	{ // arguments
