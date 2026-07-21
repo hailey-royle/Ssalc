@@ -724,6 +724,30 @@ void parse_file( struct ast_node* root ){
 	}
 }
 
+void validate_procedure( struct ast_node* root ){
+	assert( root != NULL, "Malformed argument." );
+	assert( root->raw != NULL, "Malformed argument data." );
+	assert( root->length > 0, "Malformed argument data." );
+	assert( root->kind == procedure_node, "Malformed argument data." );
+	assert( root->child != NULL, "Malformed argument data." );
+	// nothing needs to happend yet
+}
+
+void validate_globals( struct ast_node* root ){
+	assert( root != NULL, "Malformed argument." );
+	assert( root->raw != NULL, "Malformed argument data." );
+	assert( root->length > 0, "Malformed argument data." );
+	assert( root->kind == file_node, "Malformed argument data." );
+	assert( root->child != NULL, "Malformed argument data." );
+	assert( root->sibling == NULL, "Not supporing multiple files." );
+	struct ast_node* node = root->child;
+	assert( node->child != NULL, "Malformed argument data." );
+	assert( node->sibling == NULL, "Not supporing multiple globals." );
+	assert( node->kind == procedure_node, "Malformed argument data." );
+	assert( char_array_equal( node->raw, "start", 5 ), "Malformed argument data." );
+	validate_procedure( node );
+}
+
 i32 main( i32 argc, char* argv[] ){
 	if( argc != 2 ){
 		fprintf( stderr, "Usage: ssalc file_name.sl\n" );
@@ -733,10 +757,10 @@ i32 main( i32 argc, char* argv[] ){
 	root_node .length = strlen( argv[ 1 ]),
 	root_node .kind = file_node,
 	parse_file( &root_node );
+	validate_globals( &root_node );
 #ifdef DEBUG
 	print_ast();
 #endif
-//	validate_globals( &root_node );
 //	output( root_node );
 	return 0;
 }
