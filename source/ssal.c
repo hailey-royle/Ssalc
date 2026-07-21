@@ -695,7 +695,7 @@ void parse_file( struct ast_node* root ){
 	};
 	bool error = string_from_file( &file.source, file.root->raw );
 	if( error ){
-		compiler_error( &file, file.root, halt_level, "Unable to open file \"%s\"", root->raw );
+		compiler_error( &file, file.root, halt_level, "Unable to read from file \"%s\"", root->raw );
 	}
 	root->child = ast_node_array_new( &file.node_raw );
 	struct ast_node* node = root->child;
@@ -748,20 +748,59 @@ void validate_globals( struct ast_node* root ){
 	validate_procedure( node );
 }
 
+void output_procedure( struct string* file, struct ast_node* root ){
+	assert( root != NULL, "Malformed argument." );
+	assert( root->kind == procedure_node, "Malformed argument data." );
+	string_append( file, "define ", 7 );
+	string_append( file, root->child->child->raw, root->child->child->length );
+	string_append( file, " @", 2 );
+	string_append( file, root->raw, root->length );
+	string_append( file, "( ", 2 );
+	assert( *root->child->child->sibling->child->raw == '@', "Bad procedure argument for now." );
+	assert( *root->child->child->sibling->child->child->raw == '@', "Bad procedure argument for now." );
+	string_append( file, "ptr %", 5 );
+	string_append( file, root->child->child->sibling->raw, root->child->child->sibling->length );
+	string_append( file, ".data, ", 7 );
+	string_append( file, "i64 %", 5 );
+	string_append( file, root->child->child->sibling->raw, root->child->child->sibling->length );
+	string_append( file, ".count ){\n", 10 );
+	assert( root->child->child->sibling->sibling->kind == jump_node, "Bad statement not jump for now." );
+	assert( char_array_equal( root->child->child->sibling->sibling->raw, "return", 6 ), "Bad statement not jump return for now." );
+	string_append( file, "\tret ", 5 );
+	string_append( file, root->child->child->raw, root->child->child->length );
+	string_append( file, " ", 1 );
+	string_append( file, root->child->child->sibling->sibling->child->raw, root->child->child->sibling->sibling->child->length );
+	string_append( file, "\n}\n", 3 );
+}
+
+void output( struct ast_node* root ){
+	assert( root != NULL, "Malformed argument." );
+	assert( root->kind == file_node, "Malformed argument data." );
+	struct string file = { 0 };
+	char llvmir_start[] = "target triple = \"x86_64-unknown-linux-gnu\"\n\n";
+	string_append( &file, llvmir_start, sizeof( llvmir_start ) - 1 );
+	output_procedure( &file, root->child );
+	root->raw[ root->length - 2 ] = 'l';
+	bool error = string_to_file( &file, root->raw );
+	if( error ){
+		printf( "%s%sError%s Unable to write to file \"%s\"%s\n\n", ansi_bold_start, ansi_foreground_red, ansi_foreground_default, root->raw, ansi_bold_end );
+	}
+}
+
 i32 main( i32 argc, char* argv[] ){
 	if( argc != 2 ){
 		fprintf( stderr, "Usage: ssalc file_name.sl\n" );
 		exit( 1 );
 	}
-	root_node .raw = argv[ 1 ],
-	root_node .length = strlen( argv[ 1 ]),
-	root_node .kind = file_node,
+	root_node.raw = argv[ 1 ],
+	root_node.length = strlen( argv[ 1 ]),
+	root_node.kind = file_node,
 	parse_file( &root_node );
 	validate_globals( &root_node );
+	output( &root_node );
 #ifdef DEBUG
 	print_ast();
 #endif
-//	output( root_node );
 	return 0;
 }
 
