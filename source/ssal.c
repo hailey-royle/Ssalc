@@ -124,7 +124,6 @@ enum compiler_error_level {
 
 struct ast_node root_node = { 0 };
 
-
 void print_ast_node( struct ast_node* node, i32 depth ){
         assert( node != NULL, "Malformed argument." );
 	char* kind = NULL;
@@ -229,6 +228,18 @@ void compiler_error_token( struct source_file* file, struct raw_token* problem, 
 	va_end( args );
 }
 
+bool char_array_equal( char* a, char* b, i32 n ){
+	for( i32 i = 0; i < n; i++ ){
+		if( a[ i ] == 0 || b[ i ] == 0 || a[ i ] != b[ i ] ){
+			return false;
+		}
+	}
+	if( a[ n ] == b[ n ] ){
+		return false;
+	}
+	return true;
+}
+
 bool char_is_space( char c ){
 	return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
 }
@@ -247,15 +258,6 @@ bool char_is_integer_start( char c ){
 
 bool char_is_integer( char c ){
 	return ( c >= '0' && c <= '9' ) || c == '_';
-}
-
-bool char_array_equal( char* a, char* b, i32 n ){
-	for( i32 i = 0; i < n; i++ ){
-		if( a[ i ] == 0 || b[ i ] == 0 || a[ i ] != b[ i ] ){
-			return false;
-		}
-	}
-	return true;
 }
 
 struct raw_token next_token( struct source_file* file ){
@@ -300,6 +302,18 @@ struct raw_token next_token( struct source_file* file ){
 			token.line = file->line;
 	                compiler_error_token( file, &token, halt_level, "String literal must not directly follow comment. (Hint: add ' ' after comment)" );
 		}
+	}
+	while( char_is_space( file->source.data[ file->index ])){
+		if( '\n' == file->source.data[ file->index ]){
+			file->column = 0;
+			file->line += 1;
+		} else {
+			file->column += 1;
+		}
+		file->index += 1;
+	}
+	if( file->index >= file->source.length ){
+		return token;
 	}
 	token.raw = &file->source.data[ file->index ];
 	token.column = file->column;
