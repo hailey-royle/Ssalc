@@ -586,6 +586,70 @@ void build_node( struct ast_node* node, char* raw, i32 length, i32 line, i32 col
 	node->kind = kind;
 }
 
+void parse_jump( struct source_file* file, struct ast_node* local_root ){
+	assert( file != NULL, "Malformed argument." );
+	assert( local_root != NULL, "Malformed argument." );
+	assert( local_root->child == NULL, "Malformed argument data." );
+	assert( local_root->kind == jump_node, "Malformed argument data." );
+	struct raw_token token = next_token( file );
+	if( token.kind != identifier_token ){
+		compiler_error_token( file, &token, error_level, "Can only jump to return." );
+	}
+	if( !char_array_equal( token.raw, "return", 6 )){
+		compiler_error_token( file, &token, error_level, "Can only jump to return." );
+	}
+	build_node( local_root, token.raw, token.length, token.line, token.column, jump_node );
+	token = next_token( file );
+	if( token.kind != argument_open_token ){
+		compiler_error_token( file, &token, error_level, "Expected '[' after jump location." );
+	}
+	token = next_token( file );
+	if( token.kind == literal_number_token ){
+		local_root->child = ast_node_array_new( &file->node_raw );
+		build_node( local_root->child, token.raw, token.length, token.line, token.column, literal_number_node );
+	} else if( token.kind == identifier_token ){
+		local_root->child = ast_node_array_new( &file->node_raw );
+		build_node( local_root->child, token.raw, token.length, token.line, token.column, register_node );
+	} else {
+		compiler_error_token( file, &token, error_level, "Expected jump return argument." );
+	}
+	token = next_token( file );
+	if( token.kind != argument_close_token ){
+		compiler_error_token( file, &token, error_level, "Expected ']' after jump argument." );
+	}
+	token = next_token( file );
+	if( token.kind != statement_end_token ){
+		compiler_error_token( file, &token, error_level, "';' required at the end of every statement." );
+	}
+}
+
+void parse_register( struct source_file* file, struct ast_node* local_root ){
+	assert( file != NULL, "Malformed argument." );
+	assert( local_root != NULL, "Malformed argument." );
+	assert( local_root->child == NULL, "Malformed argument data." );
+	assert( local_root->kind == register_node, "Malformed argument data." );
+	struct raw_token token = next_token( file );
+	if( token.kind != identifier_token ){
+		compiler_error_token( file, &token, error_level, "regsiter must be followed by type." );
+	}
+	local_root->child = ast_node_array_new( &file->node_raw );
+	build_node( local_root->child, token.raw, token.length, token.line, token.column, type_node );
+	token = next_token( file );
+	if( token.kind != assignment_token ){
+		compiler_error_token( file, &token, error_level, "register must be assigned a value." );
+	}
+	token = next_token( file );
+	if( token.kind != literal_number_token ){
+		compiler_error_token( file, &token, error_level, "register must be assigned a value." );
+	}
+	local_root->child->sibling = ast_node_array_new( &file->node_raw );
+	build_node( local_root->child->sibling, token.raw, token.length, token.line, token.column, literal_number_node );
+	token = next_token( file );
+	if( token.kind != statement_end_token ){
+		compiler_error_token( file, &token, error_level, "Statement must end with ';'" );
+	}
+}
+
 void parse_procedure( struct source_file* file, struct ast_node* local_root ){
 	assert( file != NULL, "Malformed argument." );
 	assert( local_root != NULL, "Malformed argument." );
@@ -653,43 +717,23 @@ void parse_procedure( struct source_file* file, struct ast_node* local_root ){
 	if( token.kind != scope_open_token ){
 		compiler_error_token( file, &token, error_level, "Expected '{' following procedue arguments." );
 	}
-	{ // jump return statement
+	while( 1 ){
 		token = next_token( file );
-		if( token.kind != jump_token ){
-			compiler_error_token( file, &token, error_level, "Expected jump to return." );
+		if( token.kind == identifier_token ){
+			statement->sibling = ast_node_array_new( &file->node_raw );
+			statement = statement->sibling;
+			build_node( statement, token.raw, token.length, token.line, token.column, register_node );
+			parse_register( file, statement );
+		} else if( token.kind == jump_token ){
+			statement->sibling = ast_node_array_new( &file->node_raw );
+			statement = statement->sibling;
+			statement->kind = jump_node;
+			parse_jump( file, statement );
+		} else if( token.kind == scope_close_token ){
+			break;
+		} else {
+			compiler_error_token( file, &token, error_level, "Expected jump or register." );
 		}
-		token = next_token( file );
-		if( token.kind != identifier_token ){
-			compiler_error_token( file, &token, error_level, "Can only jump to return." );
-		}
-		if( !char_array_equal( token.raw, "return", 6 )){
-			compiler_error_token( file, &token, error_level, "Can only jump to return." );
-		}
-		statement->sibling = ast_node_array_new( &file->node_raw );
-		statement = statement->sibling;
-		build_node( statement, token.raw, token.length, token.line, token.column, jump_node );
-		token = next_token( file );
-		if( token.kind != argument_open_token ){
-			compiler_error_token( file, &token, error_level, "Expected '[' after jump location." );
-		}
-		token = next_token( file );
-		if( token.kind != literal_number_token ){
-			compiler_error_token( file, &token, error_level, "Expected jump return argument." );
-		}
-		statement->child  = ast_node_array_new( &file->node_raw );
-		build_node( statement->child, token.raw, token.length, token.line, token.column, literal_number_node );
-		token = next_token( file );
-		if( token.kind != argument_close_token ){
-			compiler_error_token( file, &token, error_level, "Expected ']' after jump argument." );
-		}
-		token = next_token( file );
-		if( token.kind != statement_end_token ){
-			compiler_error_token( file, &token, error_level, "';' required at the end of every statement." );
-		}
-	}
-	token = next_token( file );
-	if( token.kind != scope_close_token ){
-		compiler_error_token( file, &token, error_level, "Expected '}' following procedure scope." );
 	}
 }
 
@@ -738,13 +782,18 @@ void parse_file( struct ast_node* root ){
 	}
 }
 
-void validate_procedure( struct ast_node* root ){
-	assert( root != NULL, "Malformed argument." );
-	assert( root->raw != NULL, "Malformed argument data." );
-	assert( root->length > 0, "Malformed argument data." );
-	assert( root->kind == procedure_node, "Malformed argument data." );
-	assert( root->child != NULL, "Malformed argument data." );
-	// nothing needs to happend yet
+void validate_start_procedure( struct ast_node* local_root ){
+	assert( local_root != NULL, "Malformed argument." );
+	assert( local_root->raw != NULL, "Malformed argument data." );
+	assert( local_root->length > 0, "Malformed argument data." );
+	assert( local_root->child != NULL, "Malformed argument data." );
+	assert( local_root->kind == procedure_node, "Malformed argument data." );
+	assert( char_array_equal( local_root->raw, "start", 5 ), "Malformed argument data." );
+	struct ast_node* return_value = local_root->child->child;
+	while( return_value->kind != jump_node ){
+		assert( return_value->sibling != NULL, "Bug is parse stage." );
+		return_value = return_value->sibling;
+	}
 }
 
 void validate_globals( struct ast_node* root ){
@@ -759,7 +808,7 @@ void validate_globals( struct ast_node* root ){
 	assert( node->sibling == NULL, "Not supporing multiple globals." );
 	assert( node->kind == procedure_node, "Malformed argument data." );
 	assert( char_array_equal( node->raw, "start", 5 ), "Malformed argument data." );
-	validate_procedure( node );
+	validate_start_procedure( node );
 }
 
 void output_procedure( struct string* file, struct ast_node* root ){
@@ -778,13 +827,38 @@ void output_procedure( struct string* file, struct ast_node* root ){
 	string_append( file, "i64 %", 5 );
 	string_append( file, root->child->child->sibling->raw, root->child->child->sibling->length );
 	string_append( file, ".count ){\n", 10 );
-	assert( root->child->child->sibling->sibling->kind == jump_node, "Bad statement not jump for now." );
-	assert( char_array_equal( root->child->child->sibling->sibling->raw, "return", 6 ), "Bad statement not jump return for now." );
-	string_append( file, "\tret ", 5 );
-	string_append( file, root->child->child->raw, root->child->child->length );
-	string_append( file, " ", 1 );
-	string_append( file, root->child->child->sibling->sibling->child->raw, root->child->child->sibling->sibling->child->length );
-	string_append( file, "\n}\n", 3 );
+	struct ast_node* statement = root->child->child->sibling->sibling;
+	while( 1 ){
+		if( statement->kind == register_node ){
+			string_append( file, "\t %", 3 );
+			string_append( file, statement->raw, statement->length );
+			string_append( file, " = add ", 7 );
+			string_append( file, statement->child->raw, statement->child->length );
+			string_append( file, " ", 1 );
+			string_append( file, statement->child->sibling->raw, statement->child->sibling->length );
+			string_append( file, ", 0\n", 4 );
+		} else if( statement->kind == jump_node ){
+			assert( char_array_equal( statement->raw, "return", 6 ), "Bad statement not jump return for now." );
+			string_append( file, "\tret ", 5 );
+			string_append( file, root->child->child->raw, root->child->child->length );
+			string_append( file, " ", 1 );
+			if( statement->child->kind == register_node ){
+				string_append( file, "%", 1 );
+				string_append( file, statement->child->raw, statement->child->length );
+			} else if ( statement->child->kind == literal_number_node ){
+				string_append( file, statement->child->raw, statement->child->length );
+			} else {
+				assert( false, "Bad statement not valid return for now." );
+			}
+			string_append( file, "\n", 1 );
+			break;
+		} else {
+			assert( false, "Bad statement not jump for now." );
+		}
+		assert( statement->sibling != NULL, "Invalid ast." );
+		statement = statement->sibling;
+	}
+	string_append( file, "}\n", 2 );
 }
 
 void output( struct ast_node* root ){
