@@ -77,6 +77,7 @@ enum ast_node_kind {
 	jump_node,
 	call_node,
 	literal_number_node,
+	member_node,
 	addition_node,
 	// not exaustive
 };
@@ -154,6 +155,8 @@ void print_ast_node( struct ast_node* node, i32 depth ){
 		kind = "call";
 	} else if ( node->kind == literal_number_node ){
 		kind = "literal_number";
+	} else if ( node->kind == member_node ){
+		kind = "member";
 	} else if ( node->kind == addition_node ){
 		kind = "addition";
 	} else {
@@ -594,6 +597,7 @@ enum ast_node_kind parse_expression_token_kind_to_node( struct source_file* file
 	case literal_number_token: return literal_number_node;
 	case identifier_token:     return register_node;
 	case addition_token:       return addition_node;
+	case member_token:         return member_node;
 	default:                   compiler_error_token( file, &token, error_level, "Expected expression." );
 	}
 	return 0;
@@ -604,7 +608,7 @@ bool token_is_expression_leaf( struct raw_token token ){
 }
 
 bool token_is_binary_operator( struct raw_token token ){
-	return token.kind == addition_token;
+	return token.kind == addition_token || token.kind == member_token;
 }
 
 struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind expected_post ){
@@ -899,6 +903,7 @@ void output_procedure( struct string* file, struct ast_node* root ){
 				string_append( file, "\n", 1 );
 		} else if( statement->kind == jump_node ){
 			assert( char_array_equal( statement->raw, "return", 6 ), "Bad statement not jump return for now." );
+			print_ast();
 			if( statement->child->kind == addition_node ){
 				string_append( file, "\t%", 2 );
 				string_append( file, statement->raw, statement->length );
@@ -927,6 +932,12 @@ void output_procedure( struct string* file, struct ast_node* root ){
 				string_append( file, " %", 2 );
 				string_append( file, statement->raw, statement->length );
 				string_append( file, ".1", 2 );
+			} else if( statement->child->kind == member_node ){
+				assert( char_array_equal( statement->child->sibling->raw, "argument", 8 ), "Only supporting argument.count member." );
+				assert( char_array_equal( statement->child->child->raw, "count", 5 ), "Only supporting argument.count member." );
+				string_append( file, "\tret ", 5 );
+				string_append( file, root->child->child->raw, root->child->child->length );
+				string_append( file, " %argument.count", 16 );
 			} else {
 				string_append( file, "\tret ", 5 );
 				string_append( file, root->child->child->raw, root->child->child->length );
