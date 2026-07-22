@@ -903,7 +903,6 @@ void output_procedure( struct string* file, struct ast_node* root ){
 				string_append( file, "\n", 1 );
 		} else if( statement->kind == jump_node ){
 			assert( char_array_equal( statement->raw, "return", 6 ), "Bad statement not jump return for now." );
-			print_ast();
 			if( statement->child->kind == addition_node ){
 				string_append( file, "\t%", 2 );
 				string_append( file, statement->raw, statement->length );
