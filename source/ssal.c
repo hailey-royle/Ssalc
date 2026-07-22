@@ -77,6 +77,7 @@ enum ast_node_kind {
 	jump_node,
 	call_node,
 	literal_number_node,
+	addition_node,
 	// not exaustive
 };
 
@@ -153,6 +154,8 @@ void print_ast_node( struct ast_node* node, i32 depth ){
 		kind = "call";
 	} else if ( node->kind == literal_number_node ){
 		kind = "literal_number";
+	} else if ( node->kind == addition_node ){
+		kind = "addition";
 	} else {
 		assert( false, "Unknown node kind" );
 	}
@@ -586,6 +589,58 @@ void build_node( struct ast_node* node, char* raw, i32 length, i32 line, i32 col
 	node->kind = kind;
 }
 
+enum ast_node_kind parse_expression_token_kind_to_node( struct source_file* file, struct raw_token token ){
+	switch( token.kind ){
+	case literal_number_token: return literal_number_node;
+	case identifier_token:     return register_node;
+	case addition_token:       return addition_node;
+	default:                   compiler_error_token( file, &token, error_level, "Expected expression." );
+	}
+	return 0;
+}
+
+bool token_is_expression_leaf( struct raw_token token ){
+	return token.kind == literal_number_token || token.kind == identifier_token;
+}
+
+bool token_is_binary_operator( struct raw_token token ){
+	return token.kind == addition_token;
+}
+
+struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind expected_post ){
+	assert( file != NULL, "Malformed argument." );
+	struct raw_token token = next_token( file );
+	if( !token_is_expression_leaf( token )){
+		compiler_error_token( file, &token, error_level, "Expected expression leaf." );
+	}
+	struct ast_node* left = ast_node_array_new( &file->node_raw );
+	build_node( left, token.raw, token.length, token.line, token.column, parse_expression_token_kind_to_node( file, token ));
+	token = next_token( file );
+	if( !token_is_binary_operator( token )){
+		if( token.kind == expected_post ){
+			return left;
+		}
+		compiler_error_token( file, &token, error_level, "Expected expression binary operator." );
+	}
+	struct ast_node* operator = ast_node_array_new( &file->node_raw );
+	build_node( operator, token.raw, token.length, token.line, token.column, parse_expression_token_kind_to_node( file, token ));
+	token = next_token( file );
+	if( !token_is_expression_leaf( token )){
+		compiler_error_token( file, &token, error_level, "Expected expression leaf." );
+	}
+	struct ast_node* right = ast_node_array_new( &file->node_raw );
+	build_node( right, token.raw, token.length, token.line, token.column, parse_expression_token_kind_to_node( file, token ));
+	operator->sibling = left;
+	operator->child = right;
+	token = next_token( file );
+	if( token.kind == expected_post ){
+		return operator;
+	} else {
+		compiler_error_token( file, &token, error_level, "Expected expression end." );
+		return NULL;
+	}
+}
+
 void parse_jump( struct source_file* file, struct ast_node* local_root ){
 	assert( file != NULL, "Malformed argument." );
 	assert( local_root != NULL, "Malformed argument." );
@@ -603,20 +658,7 @@ void parse_jump( struct source_file* file, struct ast_node* local_root ){
 	if( token.kind != argument_open_token ){
 		compiler_error_token( file, &token, error_level, "Expected '[' after jump location." );
 	}
-	token = next_token( file );
-	if( token.kind == literal_number_token ){
-		local_root->child = ast_node_array_new( &file->node_raw );
-		build_node( local_root->child, token.raw, token.length, token.line, token.column, literal_number_node );
-	} else if( token.kind == identifier_token ){
-		local_root->child = ast_node_array_new( &file->node_raw );
-		build_node( local_root->child, token.raw, token.length, token.line, token.column, register_node );
-	} else {
-		compiler_error_token( file, &token, error_level, "Expected jump return argument." );
-	}
-	token = next_token( file );
-	if( token.kind != argument_close_token ){
-		compiler_error_token( file, &token, error_level, "Expected ']' after jump argument." );
-	}
+	local_root->child = parse_expression( file, argument_close_token );
 	token = next_token( file );
 	if( token.kind != statement_end_token ){
 		compiler_error_token( file, &token, error_level, "';' required at the end of every statement." );
@@ -638,20 +680,7 @@ void parse_register( struct source_file* file, struct ast_node* local_root ){
 	if( token.kind != assignment_token ){
 		compiler_error_token( file, &token, error_level, "register must be assigned a value." );
 	}
-	token = next_token( file );
-	if( token.kind == identifier_token ){
-		local_root->child->sibling = ast_node_array_new( &file->node_raw );
-		build_node( local_root->child->sibling, token.raw, token.length, token.line, token.column, register_node );
-	} else if( token.kind == literal_number_token ){
-		local_root->child->sibling = ast_node_array_new( &file->node_raw );
-		build_node( local_root->child->sibling, token.raw, token.length, token.line, token.column, literal_number_node );
-	} else {
-		compiler_error_token( file, &token, error_level, "register must be assigned a value." );
-	}
-	token = next_token( file );
-	if( token.kind != statement_end_token ){
-		compiler_error_token( file, &token, error_level, "Statement must end with ';'" );
-	}
+	local_root->child->sibling = parse_expression( file, statement_end_token );
 }
 
 void parse_procedure( struct source_file* file, struct ast_node* local_root ){
@@ -842,12 +871,32 @@ void output_procedure( struct string* file, struct ast_node* root ){
 			if( statement->child->sibling->kind == register_node ){
 				string_append( file, "%", 1 );
 				string_append( file, statement->child->sibling->raw, statement->child->sibling->length );
+				string_append( file, ", 0", 3 );
 			} else if ( statement->child->sibling->kind == literal_number_node ){
 				string_append( file, statement->child->sibling->raw, statement->child->sibling->length );
+				string_append( file, ", 0", 3 );
+			} else if ( statement->child->sibling->kind == addition_node ){
+				if( statement->child->sibling->sibling->kind == register_node ){
+					string_append( file, "%", 1 );
+					string_append( file, statement->child->sibling->sibling->raw, statement->child->sibling->sibling->length );
+				} else if ( statement->child->sibling->sibling->kind == literal_number_node ){
+					string_append( file, statement->child->sibling->sibling->raw, statement->child->sibling->sibling->length );
+				} else {
+					assert( false, "Bad addition statement not valid for now." );
+				}
+				string_append( file, ", ", 2 );
+				if( statement->child->sibling->child->kind == register_node ){
+					string_append( file, "%", 1 );
+					string_append( file, statement->child->sibling->child->raw, statement->child->sibling->child->length );
+				} else if ( statement->child->sibling->child->kind == literal_number_node ){
+					string_append( file, statement->child->sibling->child->raw, statement->child->sibling->child->length );
+				} else {
+					assert( false, "Bad addition statement not valid for now." );
+				}
 			} else {
-				assert( false, "Bad statement not valid return for now." );
+				assert( false, "Bad statement not valid for now." );
 			}
-			string_append( file, ", 0\n", 4 );
+				string_append( file, "\n", 1 );
 		} else if( statement->kind == jump_node ){
 			assert( char_array_equal( statement->raw, "return", 6 ), "Bad statement not jump return for now." );
 			string_append( file, "\tret ", 5 );
