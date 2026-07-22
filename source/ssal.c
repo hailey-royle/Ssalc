@@ -863,7 +863,7 @@ void output_procedure( struct string* file, struct ast_node* root ){
 	struct ast_node* statement = root->child->child->sibling->sibling;
 	while( 1 ){
 		if( statement->kind == register_node ){
-			string_append( file, "\t %", 3 );
+			string_append( file, "\t%", 2 );
 			string_append( file, statement->raw, statement->length );
 			string_append( file, " = add ", 7 );
 			string_append( file, statement->child->raw, statement->child->length );
@@ -899,16 +899,46 @@ void output_procedure( struct string* file, struct ast_node* root ){
 				string_append( file, "\n", 1 );
 		} else if( statement->kind == jump_node ){
 			assert( char_array_equal( statement->raw, "return", 6 ), "Bad statement not jump return for now." );
-			string_append( file, "\tret ", 5 );
-			string_append( file, root->child->child->raw, root->child->child->length );
-			string_append( file, " ", 1 );
-			if( statement->child->kind == register_node ){
-				string_append( file, "%", 1 );
-				string_append( file, statement->child->raw, statement->child->length );
-			} else if ( statement->child->kind == literal_number_node ){
-				string_append( file, statement->child->raw, statement->child->length );
+			if( statement->child->kind == addition_node ){
+				string_append( file, "\t%", 2 );
+				string_append( file, statement->raw, statement->length );
+				string_append( file, ".1 = add ", 9 );
+				string_append( file, root->child->child->raw, root->child->child->length );
+				string_append( file, " ", 1 );
+				if( statement->child->sibling->kind == register_node ){
+					string_append( file, "%", 1 );
+					string_append( file, statement->child->sibling->raw, statement->child->sibling->length );
+				} else if ( statement->child->sibling->kind == literal_number_node ){
+					string_append( file, statement->child->sibling->raw, statement->child->sibling->length );
+				} else {
+					assert( false, "Bad addition statement not valid for now." );
+				}
+				string_append( file, ", ", 2 );
+				if( statement->child->child->kind == register_node ){
+					string_append( file, "%", 1 );
+					string_append( file, statement->child->child->raw, statement->child->child->length );
+				} else if ( statement->child->child->kind == literal_number_node ){
+					string_append( file, statement->child->child->raw, statement->child->child->length );
+				} else {
+					assert( false, "Bad addition statement not valid for now." );
+				}
+				string_append( file, "\n\tret ", 6 );
+				string_append( file, root->child->child->raw, root->child->child->length );
+				string_append( file, " %", 2 );
+				string_append( file, statement->raw, statement->length );
+				string_append( file, ".1", 2 );
 			} else {
-				assert( false, "Bad statement not valid return for now." );
+				string_append( file, "\tret ", 5 );
+				string_append( file, root->child->child->raw, root->child->child->length );
+				string_append( file, " ", 1 );
+				if( statement->child->kind == register_node ){
+					string_append( file, "%", 1 );
+					string_append( file, statement->child->raw, statement->child->length );
+				} else if ( statement->child->kind == literal_number_node ){
+					string_append( file, statement->child->raw, statement->child->length );
+				} else {
+					assert( false, "Bad statement not valid return for now." );
+				}
 			}
 			string_append( file, "\n", 1 );
 			break;
