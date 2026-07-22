@@ -1,5 +1,4 @@
 start procedure[ i64 : argument @@i8 ]
 {
-	a i64 = 10 + 9;
-	!return[ a ];
+	!return[ 11 + 10 ];
 }
