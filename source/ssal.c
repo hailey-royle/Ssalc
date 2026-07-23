@@ -85,7 +85,9 @@ enum ast_node_kind {
 };
 
 struct raw_token {
+	char* file;
 	char* raw;
+	i32 file_length;
 	i32 length;
 	i32 line;
 	i32 column;
@@ -95,10 +97,7 @@ struct raw_token {
 struct ast_node {
 	struct ast_node* sibling;
 	struct ast_node* child;
-	char* raw;
-	i32 length;
-	i32 line;
-	i32 column;
+	struct raw_token token;
 	enum ast_node_kind kind;
 };
 
@@ -118,6 +117,8 @@ struct source_file {
 	struct ast_node_array node_raw;
 	struct string source;
 	struct ast_node* root;
+	char* name;
+	i32 name_length;
 	i32 index;
 	i32 line;
 	i32 column;
@@ -130,14 +131,12 @@ struct output_context {
 };
 
 enum compiler_error_level {
-	halt_level,
 	error_level,
 	warning_level,
 	note_level,
 };
 
 #include "array.h"
-
 
 struct output_context output = { 0 };
 struct ast_node root_node = { 0 };
@@ -168,7 +167,7 @@ char* node_kind_string( struct ast_node* node ){
 void print_ast_node( struct ast_node* node, i32 depth ){
         assert( node != NULL, "Malformed argument." );
 	char* kind = node_kind_string( node );
-        printf( "%*c%s | %.*s\n", depth, ' ', kind, node->length, node->raw );
+        printf( "%*c%s | %.*s\n", depth, ' ', kind, node->token.length, node->token.raw );
         if( node->child != NULL ){
                 print_ast_node( node->child, depth + 1 );
         }
@@ -183,20 +182,14 @@ void print_ast(){
 	printf( "==== Ast End ====\n\n" );
 }
 
-void compiler_error( struct source_file* file, struct ast_node* problem, enum compiler_error_level level, char* format, ... ){
-        assert( file != NULL, "Malformed argument." );
-        assert( problem != NULL, "Malformed argument." );
-        assert( problem->raw != NULL, "Malformed argument." );
-	assert( problem->length > 0, "Malformed argument data." );
+void compiler_error( struct raw_token problem, enum compiler_error_level level, char* format, ... ){
+        assert( problem.file != NULL, "Malformed argument." );
+        assert( problem.raw != NULL, "Malformed argument." );
+        assert( problem.length > 0, "Malformed argument." );
+        assert( problem.column > 0, "Malformed argument." );
+        assert( problem.line > 0, "Malformed argument." );
         assert( format != NULL, "Malformed argument." );
-	char* start = problem->raw - problem->column;
-	i32 bytes_after_problem = 0;
-	while(( problem->raw[ bytes_after_problem + problem->length ] != '\n' ) &&
-	      ( problem->raw[ bytes_after_problem + problem->length ] != '\r' ) &&
-	      ( problem->raw[ bytes_after_problem + problem->length ] != '\0' )){
-		bytes_after_problem += 1;
-	}
-	if(( level == halt_level ) || ( level == error_level )){
+	if( level == error_level ){
 		printf( "%s%sError%s ", ansi_bold_start, ansi_foreground_red, ansi_foreground_default );
 	} else if( level == warning_level ){
 		printf( "%s%sWarning%s ", ansi_bold_start, ansi_foreground_yellow, ansi_foreground_default );
@@ -209,11 +202,19 @@ void compiler_error( struct source_file* file, struct ast_node* problem, enum co
 		vprintf( format, args );
 		va_end( args );
 	}
-	printf( "%s\n  %.*s | %d | %.*s%s%.*s%s%.*s\n\n",
-		ansi_bold_end, file->root->length, file->root->raw, problem->line,
-		problem->column, start, ansi_underline_start ansi_foreground_red,
-	        problem->length, start + problem->column, ansi_reset_graphics,
-		bytes_after_problem, start + problem->column + problem->length
+	printf( "%s\n", ansi_bold_end );
+	char* start = problem.raw - problem.column;
+	i32 bytes_after_problem = 0;
+	while(( problem.raw[ bytes_after_problem + problem.length ] != '\n' ) &&
+	      ( problem.raw[ bytes_after_problem + problem.length ] != '\r' ) &&
+	      ( problem.raw[ bytes_after_problem + problem.length ] != '\0' )){
+		bytes_after_problem += 1;
+	}
+	printf( "  %.*s | %d | %.*s%s%.*s%s%.*s\n\n",
+		problem.file_length, problem.file, problem.line,
+		problem.column, start, ansi_underline_start ansi_foreground_red,
+	        problem.length, start + problem.column, ansi_reset_graphics,
+		bytes_after_problem, start + problem.column + problem.length
 	);
 #ifdef DEBUG
 	print_ast();
@@ -221,23 +222,10 @@ void compiler_error( struct source_file* file, struct ast_node* problem, enum co
 	exit( 1 );
 }
 
-void compiler_error_token( struct source_file* file, struct raw_token* problem, enum compiler_error_level level, char* format, ... ){
-        assert( file != NULL, "Malformed argument." );
-        assert( problem != NULL, "Malformed argument." );
-        assert( problem->raw != NULL, "Malformed argument." );
-	assert( problem->length > 0, "Malformed argument data." );
-        assert( format != NULL, "Malformed argument." );
-	struct ast_node fake = {
-		.raw = problem->raw,
-		.length = problem->length,
-		.line = problem->line,
-		.column = problem->column,
-		.kind = error_node
-	};
-	va_list args;
-	va_start( args, format );
-	compiler_error( file, &fake, level, format, args );
-	va_end( args );
+#define compiler_assert( expr, problem, level, ... ){ \
+	if( !( expr )){ \
+		compiler_error( problem, level, __VA_ARGS__ ); \
+	} \
 }
 
 bool char_array_equal( char* a, char* b, i32 n ){
@@ -281,7 +269,11 @@ struct raw_token next_token( struct source_file* file ){
 	assert( file->source.data != NULL, "Malformed argument data." );
 	assert( file->index >= 0, "Malformed argument data." );
 	assert( file->source.length > file->index, "Malformed argument data." );
+	assert( file->name != NULL, "Malformed argument data." );
+	assert( file->name_length > 0, "Malformed argument data." );
 	struct raw_token token = { 0 };
+	token.file = file->name;
+	token.file_length = file->name_length;
 	while( char_is_space( file->source.data[ file->index ])){
 		if( '\n' == file->source.data[ file->index ]){
 			file->column = 0;
@@ -315,7 +307,7 @@ struct raw_token next_token( struct source_file* file ){
 			token.length = 1;
 			token.column = file->column;
 			token.line = file->line;
-	                compiler_error_token( file, &token, halt_level, "String literal must not directly follow comment. (Hint: add ' ' after comment)" );
+	                compiler_error( token, error_level, "String literal must not directly follow comment. (Hint: add ' ' after comment)" );
 		}
 	}
 	while( char_is_space( file->source.data[ file->index ])){
@@ -587,21 +579,12 @@ struct raw_token next_token( struct source_file* file ){
 		}
         } else {
 		token.length += 1;
-                compiler_error_token( file, &token, halt_level, "Unable to parse syntax." );
+                compiler_error( token, error_level, "Unable to parse syntax." );
         }
 	return token;
 }
 
-void build_node( struct ast_node* node, char* raw, i32 length, i32 line, i32 column, enum ast_node_kind kind ){
-	assert( node != NULL, "Malformed argument." );
-	node->raw = raw;
-	node->length = length;
-	node->line = line;
-	node->column = column;
-	node->kind = kind;
-}
-
-enum ast_node_kind parse_expression_token_kind_to_node( struct source_file* file, struct raw_token token ){
+enum ast_node_kind parse_expression_token_kind_to_node( struct raw_token token ){
 	switch( token.kind ){
 		case literal_number_token: return literal_number_node;
 		case literal_string_token: return literal_string_node;
@@ -609,7 +592,7 @@ enum ast_node_kind parse_expression_token_kind_to_node( struct source_file* file
 		case addition_token:       return addition_node;
 		case member_token:         return member_node;
 		case list_separator_token: return list_separator_node;
-		default:                   compiler_error_token( file, &token, error_level, "Expected expression." );
+		default:                   assert( false, "Expected expression." );
 	}
 	return 0;
 }
@@ -629,13 +612,12 @@ bool token_is_binary_operator( struct raw_token token ){
 struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind expected_post ){
 	assert( file != NULL, "Malformed argument." );
 	struct raw_token token = next_token( file );
-	if( !token_is_expression_leaf( token )){
-		compiler_error_token( file, &token, error_level, "Expected expression leaf." );
-	}
+	compiler_assert( token_is_expression_leaf( token ), token, error_level, "Expected register or literal at the start of an expression." );
 	struct ast_node* left = ast_node_array_new( &file->node_raw );
 	struct ast_node* operator = { 0 };
 	struct ast_node* right = { 0 };
-	build_node( left, token.raw, token.length, token.line, token.column, parse_expression_token_kind_to_node( file, token ));
+	left->token = token;
+	left->kind = parse_expression_token_kind_to_node( token );
 	token = next_token( file );
 	if( !token_is_binary_operator( token )){
 		if( token.kind == argument_open_token ){
@@ -646,22 +628,22 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 			if( token.kind == expected_post ){
 				return operator;
 			}
-			compiler_error_token( file, &token, error_level, "Expected expression binary operator or end." );
+			compiler_error( token, error_level, "Expected expression binary operator or end." );
 		}
 		if( token.kind == expected_post ){
 			return left;
 		}
-		compiler_error_token( file, &token, error_level, "Expected expression binary operator." );
+		compiler_error( token, error_level, "Expected expression binary operator." );
 	}
 	while( 1 ){
 		operator = ast_node_array_new( &file->node_raw );
-		build_node( operator, token.raw, token.length, token.line, token.column, parse_expression_token_kind_to_node( file, token ));
+		operator->token = token;
+		operator->kind = parse_expression_token_kind_to_node( token );
 		token = next_token( file );
-		if( !token_is_expression_leaf( token )){
-			compiler_error_token( file, &token, error_level, "Expected expression leaf." );
-		}
+		compiler_assert( token_is_expression_leaf( token ), token, error_level, "Expected expression leaf." );
 		right = ast_node_array_new( &file->node_raw );
-		build_node( right, token.raw, token.length, token.line, token.column, parse_expression_token_kind_to_node( file, token ));
+		right->token = token;
+		right->kind = parse_expression_token_kind_to_node( token );
 		operator->sibling = left;
 		operator->child = right;
 		token = next_token( file );
@@ -669,7 +651,7 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 			if( token.kind == expected_post ){
 				return operator;
 			}
-			compiler_error_token( file, &token, error_level, "Expected expression binary operator or end." );
+			compiler_error( token, error_level, "Expected expression binary operator or end." );
 		}
 		left = operator;
 		operator = NULL;
@@ -677,121 +659,98 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 	}
 }
 
-void parse_jump( struct source_file* file, struct ast_node* local_root ){
+void parse_jump( struct source_file* file, struct ast_node* root ){
 	assert( file != NULL, "Malformed argument." );
-	assert( local_root != NULL, "Malformed argument." );
-	assert( local_root->child == NULL, "Malformed argument data." );
-	assert( local_root->kind == jump_node, "Malformed argument data." );
+	assert( root != NULL, "Malformed argument." );
+	assert( root->child == NULL, "Malformed argument data." );
+	assert( root->kind == jump_node, "Malformed argument data." );
 	struct raw_token token = next_token( file );
-	if( token.kind != identifier_token ){
-		compiler_error_token( file, &token, error_level, "Can only jump to return." );
-	}
-	if( !char_array_equal( token.raw, "return", 6 )){
-		compiler_error_token( file, &token, error_level, "Can only jump to return." );
-	}
-	build_node( local_root, token.raw, token.length, token.line, token.column, jump_node );
+	compiler_assert( token.kind == identifier_token, token, error_level, "Can only jump to return." );
+	compiler_assert( char_array_equal( token.raw, "return", 6 ), token, error_level, "Can only jump to return." );
+	root->token = token;
+	root->kind = jump_node;
 	token = next_token( file );
-	if( token.kind != argument_open_token ){
-		compiler_error_token( file, &token, error_level, "Expected '[' after jump location." );
-	}
-	local_root->child = parse_expression( file, argument_close_token );
+	compiler_assert( token.kind == argument_open_token, token, error_level, "Expected '[' after jump location." );
+	root->child = parse_expression( file, argument_close_token );
 	token = next_token( file );
-	if( token.kind != statement_end_token ){
-		compiler_error_token( file, &token, error_level, "';' required at the end of every statement." );
-	}
+	compiler_assert( token.kind == statement_end_token, token, error_level, "';' required at the end of every statement." );
 }
 
-void parse_register( struct source_file* file, struct ast_node* local_root ){
+void parse_register( struct source_file* file, struct ast_node* root ){
 	assert( file != NULL, "Malformed argument." );
-	assert( local_root != NULL, "Malformed argument." );
-	assert( local_root->child == NULL, "Malformed argument data." );
-	assert( local_root->kind == register_node, "Malformed argument data." );
+	assert( root != NULL, "Malformed argument." );
+	assert( root->child == NULL, "Malformed argument data." );
+	assert( root->kind == register_node, "Malformed argument data." );
 	struct raw_token token = next_token( file );
-	if( token.kind != identifier_token ){
-		compiler_error_token( file, &token, error_level, "regsiter must be followed by type." );
-	}
-	local_root->child = ast_node_array_new( &file->node_raw );
-	build_node( local_root->child, token.raw, token.length, token.line, token.column, type_node );
+	compiler_assert( token.kind == identifier_token, token, error_level, "regsiter must be followed by type." );
+	root->child = ast_node_array_new( &file->node_raw );
+	root->child->token = token;
+	root->child->kind = type_node;
 	token = next_token( file );
-	if( token.kind != assignment_token ){
-		compiler_error_token( file, &token, error_level, "register must be assigned a value." );
-	}
-	local_root->child->sibling = parse_expression( file, statement_end_token );
+	compiler_assert( token.kind == assignment_token, token, error_level, "register must be assigned a value." );
+	root->child->sibling = parse_expression( file, statement_end_token );
 }
 
-void parse_procedure( struct source_file* file, struct ast_node* local_root ){
+void parse_procedure( struct source_file* file, struct ast_node* root ){
 	assert( file != NULL, "Malformed argument." );
-	assert( local_root != NULL, "Malformed argument." );
-	assert( local_root->child == NULL, "Malformed argument data." );
-	assert( local_root->raw != NULL, "Malformed argument data." );
-	assert( local_root->length > 0, "Malformed argument data." );
-	assert( local_root->kind == procedure_node, "Malformed argument data." );
-	local_root->child = ast_node_array_new( &file->node_raw );
-	struct ast_node* routine = local_root->child;
-	build_node( routine, local_root->raw, local_root->length, local_root->line, local_root->column, routine_node );
+	assert( root != NULL, "Malformed argument." );
+	assert( root->child == NULL, "Malformed argument data." );
+	assert( root->kind == procedure_node, "Malformed argument data." );
+	root->child = ast_node_array_new( &file->node_raw );
+	struct ast_node* routine = root->child;
+	routine->token = root->token;
+	routine->kind = routine_node;
 	struct raw_token token = next_token( file );
-	if( token.kind != argument_open_token ){
-		compiler_error_token( file, &token, error_level, "Expected '[' following procedure declaration." );
-	}
+	compiler_assert( token.kind == argument_open_token, token, error_level, "Expected '[' following procedure declaration." );
 	struct ast_node* statement = routine;
 	{ // return type
 		token = next_token( file );
-		if( token.kind != identifier_token ){
-			compiler_error_token( file, &token, error_level, "Expected return type to start procedure arguments." );
-		}
+		compiler_assert( token.kind == identifier_token, token, error_level, "Expected return type to start procedure arguments." );
 		statement->child = ast_node_array_new( &file->node_raw );
 		statement = statement->child;
-		build_node( statement, token.raw, token.length, token.line, token.column, type_node );
+		statement->token = token;
+		statement->kind = type_node;
 		token = next_token( file );
-		if( token.kind != result_token ){
-			compiler_error_token( file, &token, error_level, "Expected ':' after return type in procedure arguments." );
-		}
+		compiler_assert( token.kind == result_token, token, error_level, "Expected ':' after return type in procedure arguments." );
 	}
 	{ // arguments
 		token = next_token( file );
-		if( token.kind != identifier_token ){
-			compiler_error_token( file, &token, error_level, "Expected argument name." );
-		}
+		compiler_assert( token.kind == identifier_token, token, error_level, "Expected argument name." );
 		statement->sibling = ast_node_array_new( &file->node_raw );
 		statement = statement->sibling;
 		struct ast_node* argument = statement;
-		build_node( argument, token.raw, token.length, token.line, token.column, argument_node );
+		argument->token = token;
+		argument->kind = argument_node;
 		token = next_token( file );
-		if( token.kind != array_token ){
-			compiler_error_token( file, &token, error_level, "Start procedure must have one arugment of type '@@i8'." );
-		}
+		compiler_assert( token.kind == array_token, token, error_level, "Start procedure must have one arugment of type '@@i8'." );
 		argument->child = ast_node_array_new( &file->node_raw );
 		argument = argument->child;
-		build_node( argument, token.raw, token.length, token.line, token.column, type_node );
+		argument->token = token;
+		argument->kind = type_node;
 		token = next_token( file );
-		if( token.kind != array_token ){
-			compiler_error_token( file, &token, error_level, "Start procedure must have one arugment of type '@@i8'." );
-		}
+		compiler_assert( token.kind == array_token, token, error_level, "Start procedure must have one arugment of type '@@i8'." );
 		argument->child = ast_node_array_new( &file->node_raw );
 		argument = argument->child;
-		build_node( argument, token.raw, token.length, token.line, token.column, type_node );
+		argument->token = token;
+		argument->kind = type_node;
 		token = next_token( file );
-		if( token.kind != identifier_token ){
-			compiler_error_token( file, &token, error_level, "Start procedure must have one arugment of type '@@i8'." );
-		}
+		compiler_assert( token.kind == identifier_token, token, error_level, "Start procedure must have one arugment of type '@@i8'." );
 		argument->child = ast_node_array_new( &file->node_raw );
 		argument = argument->child;
-		build_node( argument, token.raw, token.length, token.line, token.column, type_node );
+		argument->token = token;
+		argument->kind = type_node;
 		token = next_token( file );
-		if( token.kind != argument_close_token ){
-			compiler_error_token( file, &token, error_level, "Expected ']' following procedure arguments." );
-		}
+		compiler_assert( token.kind == argument_close_token, token, error_level, "Expected ']' following procedure arguments." );
 	}
 	token = next_token( file );
-	if( token.kind != scope_open_token ){
-		compiler_error_token( file, &token, error_level, "Expected '{' following procedue arguments." );
-	}
+	compiler_assert( token.kind == scope_open_token, token, error_level, "Expected '{' following procedue arguments." );
 	while( 1 ){
 		token = next_token( file );
 		if( token.kind == identifier_token ){
 			statement->sibling = ast_node_array_new( &file->node_raw );
 			statement = statement->sibling;
-			build_node( statement, token.raw, token.length, token.line, token.column, register_node );
+			statement->token = token;
+			statement->kind = register_node;
 			parse_register( file, statement );
 		} else if( token.kind == jump_token ){
 			statement->sibling = ast_node_array_new( &file->node_raw );
@@ -801,7 +760,7 @@ void parse_procedure( struct source_file* file, struct ast_node* local_root ){
 		} else if( token.kind == scope_close_token ){
 			break;
 		} else {
-			compiler_error_token( file, &token, error_level, "Expected jump or register." );
+			compiler_error( token, error_level, "Expected jump or register." );
 		}
 	}
 }
@@ -809,66 +768,64 @@ void parse_procedure( struct source_file* file, struct ast_node* local_root ){
 void parse_file( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->child == NULL, "Malformed argument data." );
-	assert( root->raw != NULL, "Malformed argument data." );
-	assert( root->length > 0, "Malformed argument data." );
+	assert( root->token.raw != NULL, "Malformed argument data." );
+	assert( root->token.length > 0, "Malformed argument data." );
 	assert( root->kind == file_node, "Malformed argument data." );
 	struct source_file file = {
 		.node_raw = { 0 },
 		.source = { 0 },
 		.root = root,
+		.name = root->token.raw,
+		.name_length = root->token.file_length,
 		.index = 0,
 		.line = 1,
 		.column = 0,
 	};
-	bool error = string_from_file( &file.source, file.root->raw );
-	if( error ){
-		compiler_error( &file, file.root, halt_level, "Unable to read from file \"%s\"", root->raw );
-	}
+	bool error = string_from_file( &file.source, root->token.raw );
+	compiler_assert( !error, root->token, error_level, "Unable to read from file \"%s\"", root->token.raw );
 	root->child = ast_node_array_new( &file.node_raw );
 	struct ast_node* node = root->child;
 	struct raw_token token = next_token( &file );
-	build_node( node, token.raw, token.length, token.line, token.column, 0 );
+	node->token = token;
 	while( 1 ){
 		if( token.kind == identifier_token ){
 			token = next_token( &file );
 			if( token.kind == procedure_token ){
 				node->kind = procedure_node;
-				if( !char_array_equal( node->raw, "start", 5 )){
-					compiler_error( &file, node, error_level, "Compiler only supports start procedure." );
-				}
+				compiler_assert( char_array_equal( node->token.raw, "start", 5 ), node->token, error_level, "Compiler only supports start procedure." );
 				parse_procedure( &file, node );
 			} else {
-				compiler_error_token( &file, &token, error_level, "Compiler only supports procedures in global scope." );
+				compiler_error( token, error_level, "Compiler only supports procedures in global scope." );
 			}
 		} else {
-			compiler_error_token( &file, &token, error_level, "Expected global declaration." );
+			compiler_error( token, error_level, "Expected global declaration." );
 		}
 		token = next_token( &file );
 		if( file.index >= file.source.length ){
 			break;
 		}
-		compiler_error_token( &file, &token, error_level, "Compiler only supports start procedure in global scope." );
+		compiler_error( token, error_level, "Compiler only supports start procedure in global scope." );
 	}
 }
 
 void validate_start_procedure( struct ast_node* root, struct ast_node* procedure ){
 	assert( root != NULL, "Malformed argument." );
 	assert( procedure != NULL, "Malformed argument." );
-	assert( procedure->raw != NULL, "Malformed argument data." );
-	assert( procedure->length > 0, "Malformed argument data." );
+	assert( procedure->token.raw != NULL, "Malformed argument data." );
+	assert( procedure->token.length > 0, "Malformed argument data." );
 	assert( procedure->child != NULL, "Malformed argument data." );
 	assert( procedure->kind == procedure_node, "Malformed argument data." );
-	assert( char_array_equal( procedure->raw, "start", 5 ), "Malformed argument data." );
+	assert( char_array_equal( procedure->token.raw, "start", 5 ), "Malformed argument data." );
 	struct ast_node* start_routine = procedure->child;
 	assert( start_routine->child != NULL, "Malformed argument data." );
 	assert( start_routine->kind == routine_node, "Malformed argument data." );
-	assert( char_array_equal( start_routine->raw, "start", 5 ), "Malformed argument data." );
+	assert( char_array_equal( start_routine->token.raw, "start", 5 ), "Malformed argument data." );
 }
 
 void validate_globals( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
-	assert( root->raw != NULL, "Malformed argument data." );
-	assert( root->length > 0, "Malformed argument data." );
+	assert( root->token.raw != NULL, "Malformed argument data." );
+	assert( root->token.length > 0, "Malformed argument data." );
 	assert( root->child != NULL, "Malformed argument data." );
 	assert( root->sibling == NULL, "Not supporing multiple files." );
 	assert( root->kind == file_node, "Malformed argument data." );
@@ -876,7 +833,7 @@ void validate_globals( struct ast_node* root ){
 	assert( node->child != NULL, "Malformed argument data." );
 	assert( node->sibling == NULL, "Not supporing multiple globals." );
 	assert( node->kind == procedure_node, "Malformed argument data." );
-	assert( char_array_equal( node->raw, "start", 5 ), "Malformed argument data." );
+	assert( char_array_equal( node->token.raw, "start", 5 ), "Malformed argument data." );
 	validate_start_procedure( root, node );
 }
 
@@ -889,10 +846,10 @@ i32 output_add_string( struct ast_node* root ){
 	output.literal_string.length += string_added;
 	string_append( &output.literal_string, " = global [ ", 12 );
 	string_alloc( &output.literal_string, 32 );
-	string_added = sprintf( &output.literal_string.data[ output.literal_string.length ], "%d", root->length - 2 );
+	string_added = sprintf( &output.literal_string.data[ output.literal_string.length ], "%d", root->token.length - 2 );
 	output.literal_string.length += string_added;
 	string_append( &output.literal_string, " x i8 ] c", 9 );
-	string_append( &output.literal_string, root->raw, root->length );
+	string_append( &output.literal_string, root->token.raw, root->token.length );
 	output.literal_string_number += 1;
 	return output.literal_string_number - 1;
 }
@@ -901,9 +858,9 @@ void output_procedure_call( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->kind == call_node, "Malformed argument." );
 	string_append( &output.file, "call ", 5 );
-	if( char_array_equal( root->raw, "write_syscall", 13 )){
+	if( char_array_equal( root->token.raw, "write_syscall", 13 )){
 		string_append( &output.file, "i64 @write_syscall( i64 ", 24 );
-		string_append( &output.file, root->sibling->sibling->sibling->raw, root->sibling->sibling->sibling->length );
+		string_append( &output.file, root->sibling->sibling->sibling->token.raw, root->sibling->sibling->sibling->token.length );
 		string_append( &output.file, ", ptr ", 6 );
 		string_append( &output.file, "@.literal_string.", 17 );
 		i32 index = output_add_string( root->sibling->sibling->child );
@@ -911,7 +868,7 @@ void output_procedure_call( struct ast_node* root ){
 		i32 string_added = sprintf( &output.file.data[ output.file.length ], "%d", index );
 		output.file.length += string_added;
 		string_append( &output.file, ", i64 ", 6 );
-		string_append( &output.file, root->sibling->child->raw, root->sibling->child->length );
+		string_append( &output.file, root->sibling->child->token.raw, root->sibling->child->token.length );
 		string_append( &output.file, " )", 2 );
 	} else {
 		assert( false, "Not supporting arbitrary procedure calls yet." );
@@ -922,39 +879,39 @@ void output_register( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->kind == register_node, "Malformed argument." );
 	string_append( &output.file, "\t%", 2 );
-	string_append( &output.file, root->raw, root->length );
+	string_append( &output.file, root->token.raw, root->token.length );
 	string_append( &output.file, " = ", 3 );
 	struct ast_node* value = root->child->sibling;
 	if( value->kind == register_node ){
 		string_append( &output.file, "add ", 4 );
-		string_append( &output.file, root->child->raw, root->child->length );
+		string_append( &output.file, root->child->token.raw, root->child->token.length );
 		string_append( &output.file, " %", 2 );
-		string_append( &output.file, value->raw, value->length );
+		string_append( &output.file, value->token.raw, value->token.length );
 		string_append( &output.file, ", 0", 3 );
 	} else if ( value->kind == literal_number_node ){
 		string_append( &output.file, "add ", 4 );
-		string_append( &output.file, root->child->raw, root->child->length );
+		string_append( &output.file, root->child->token.raw, root->child->token.length );
 		string_append( &output.file, " ", 1 );
-		string_append( &output.file, value->raw, value->length );
+		string_append( &output.file, value->token.raw, value->token.length );
 		string_append( &output.file, ", 0", 3 );
 	} else if ( value->kind == addition_node ){
 		string_append( &output.file, "add ", 4 );
-		string_append( &output.file, root->child->raw, root->child->length );
+		string_append( &output.file, root->child->token.raw, root->child->token.length );
 		string_append( &output.file, " ", 1 );
 		if( value->sibling->kind == register_node ){
 			string_append( &output.file, "%", 1 );
-			string_append( &output.file, value->sibling->raw, value->sibling->length );
+			string_append( &output.file, value->sibling->token.raw, value->sibling->token.length );
 		} else if ( value->sibling->kind == literal_number_node ){
-			string_append( &output.file, value->sibling->raw, value->sibling->length );
+			string_append( &output.file, value->sibling->token.raw, value->sibling->token.length );
 		} else {
 			assert( false, "Bad addition root not valid for now." );
 		}
 		string_append( &output.file, ", ", 2 );
 		if( value->child->kind == register_node ){
 			string_append( &output.file, "%", 1 );
-			string_append( &output.file, value->child->raw, value->child->length );
+			string_append( &output.file, value->child->token.raw, value->child->token.length );
 		} else if ( value->child->kind == literal_number_node ){
-			string_append( &output.file, value->child->raw, value->child->length );
+			string_append( &output.file, value->child->token.raw, value->child->token.length );
 		} else {
 			assert( false, "Bad addition root not valid for now." );
 		}
@@ -971,50 +928,50 @@ void output_jump( struct ast_node* root, struct ast_node* procedure ){
 	assert( root->kind == jump_node, "Malformed argument." );
 	assert( procedure != NULL, "Malformed argument." );
 	assert( procedure->kind == procedure_node, "Malformed argument data." );
-	assert( char_array_equal( root->raw, "return", 6 ), "Bad root not jump return for now." );
+	assert( char_array_equal( root->token.raw, "return", 6 ), "Bad root not jump return for now." );
 	if( root->child->kind == addition_node ){
 		string_append( &output.file, "\t%", 2 );
-		string_append( &output.file, root->raw, root->length );
+		string_append( &output.file, root->token.raw, root->token.length );
 		string_append( &output.file, ".1 = add ", 9 );
-		string_append( &output.file, procedure->child->child->raw, procedure->child->child->length );
+		string_append( &output.file, procedure->child->child->token.raw, procedure->child->child->token.length );
 		string_append( &output.file, " ", 1 );
 		if( root->child->sibling->kind == register_node ){
 			string_append( &output.file, "%", 1 );
-			string_append( &output.file, root->child->sibling->raw, root->child->sibling->length );
+			string_append( &output.file, root->child->sibling->token.raw, root->child->sibling->token.length );
 		} else if ( root->child->sibling->kind == literal_number_node ){
-			string_append( &output.file, root->child->sibling->raw, root->child->sibling->length );
+			string_append( &output.file, root->child->sibling->token.raw, root->child->sibling->token.length );
 		} else {
 			assert( false, "Bad addition root not valid for now." );
 		}
 		string_append( &output.file, ", ", 2 );
 		if( root->child->child->kind == register_node ){
 			string_append( &output.file, "%", 1 );
-			string_append( &output.file, root->child->child->raw, root->child->child->length );
+			string_append( &output.file, root->child->child->token.raw, root->child->child->token.length );
 		} else if ( root->child->child->kind == literal_number_node ){
-			string_append( &output.file, root->child->child->raw, root->child->child->length );
+			string_append( &output.file, root->child->child->token.raw, root->child->child->token.length );
 		} else {
 			assert( false, "Bad addition root not valid for now." );
 		}
 		string_append( &output.file, "\n\tret ", 6 );
-		string_append( &output.file, procedure->child->child->raw, procedure->child->child->length );
+		string_append( &output.file, procedure->child->child->token.raw, procedure->child->child->token.length );
 		string_append( &output.file, " %", 2 );
-		string_append( &output.file, root->raw, root->length );
+		string_append( &output.file, root->token.raw, root->token.length );
 		string_append( &output.file, ".1", 2 );
 	} else if( root->child->kind == member_node ){
-		assert( char_array_equal( root->child->sibling->raw, "argument", 8 ), "Only supporting argument.count member." );
-		assert( char_array_equal( root->child->child->raw, "count", 5 ), "Only supporting argument.count member." );
+		assert( char_array_equal( root->child->sibling->token.raw, "argument", 8 ), "Only supporting argument.count member." );
+		assert( char_array_equal( root->child->child->token.raw, "count", 5 ), "Only supporting argument.count member." );
 		string_append( &output.file, "\tret ", 5 );
-		string_append( &output.file, procedure->child->child->raw, procedure->child->child->length );
+		string_append( &output.file, procedure->child->child->token.raw, procedure->child->child->token.length );
 		string_append( &output.file, " %argument.count", 16 );
 	} else {
 		string_append( &output.file, "\tret ", 5 );
-		string_append( &output.file, procedure->child->child->raw, procedure->child->child->length );
+		string_append( &output.file, procedure->child->child->token.raw, procedure->child->child->token.length );
 		string_append( &output.file, " ", 1 );
 		if( root->child->kind == register_node ){
 			string_append( &output.file, "%", 1 );
-			string_append( &output.file, root->child->raw, root->child->length );
+			string_append( &output.file, root->child->token.raw, root->child->token.length );
 		} else if ( root->child->kind == literal_number_node ){
-			string_append( &output.file, root->child->raw, root->child->length );
+			string_append( &output.file, root->child->token.raw, root->child->token.length );
 		} else {
 			assert( false, "Bad root not valid return for now." );
 		}
@@ -1026,17 +983,17 @@ void output_procedure( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->kind == procedure_node, "Malformed argument data." );
 	string_append( &output.file, "define ", 7 );
-	string_append( &output.file, root->child->child->raw, root->child->child->length );
+	string_append( &output.file, root->child->child->token.raw, root->child->child->token.length );
 	string_append( &output.file, " @", 2 );
-	string_append( &output.file, root->raw, root->length );
+	string_append( &output.file, root->token.raw, root->token.length );
 	string_append( &output.file, "( ", 2 );
-	assert( *root->child->child->sibling->child->raw == '@', "Bad procedure argument for now." );
-	assert( *root->child->child->sibling->child->child->raw == '@', "Bad procedure argument for now." );
+	assert( *root->child->child->sibling->child->token.raw == '@', "Bad procedure argument for now." );
+	assert( *root->child->child->sibling->child->child->token.raw == '@', "Bad procedure argument for now." );
 	string_append( &output.file, "ptr %", 5 );
-	string_append( &output.file, root->child->child->sibling->raw, root->child->child->sibling->length );
+	string_append( &output.file, root->child->child->sibling->token.raw, root->child->child->sibling->token.length );
 	string_append( &output.file, ".data, ", 7 );
 	string_append( &output.file, "i64 %", 5 );
-	string_append( &output.file, root->child->child->sibling->raw, root->child->child->sibling->length );
+	string_append( &output.file, root->child->child->sibling->token.raw, root->child->child->sibling->token.length );
 	string_append( &output.file, ".count ){\n", 10 );
 	struct ast_node* statement = root->child->child->sibling->sibling;
 	while( 1 ){
@@ -1046,6 +1003,7 @@ void output_procedure( struct ast_node* root ){
 			output_jump( statement, root );
 			break;
 		} else {
+			print_ast();
 			assert( false, "Bad statement not jump for now." );
 		}
 		assert( statement->sibling != NULL, "Invalid ast." );
@@ -1065,11 +1023,9 @@ void output_llvm( struct ast_node* root ){
 		string_append( &output.file, output.literal_string.data, output.literal_string.length );
 		string_append( &output.file, "\n", 1 );
 	}
-	root->raw[ root->length - 2 ] = 'l';
-	bool error = string_to_file( &output.file, root->raw );
-	if( error ){
-		printf( "%s%sError%s Unable to write to file \"%s\"%s\n\n", ansi_bold_start, ansi_foreground_red, ansi_foreground_default, root->raw, ansi_bold_end );
-	}
+	root->token.raw[ root->token.length - 2 ] = 'l';
+	bool error = string_to_file( &output.file, root->token.raw );
+	compiler_assert( !error, root->token, error_level, "Unable to write to file '%s'.", root->token.raw );
 }
 
 i32 main( i32 argc, char* argv[] ){
@@ -1077,8 +1033,10 @@ i32 main( i32 argc, char* argv[] ){
 		fprintf( stderr, "Usage: ssalc file_name.sl\n" );
 		exit( 1 );
 	}
-	root_node.raw = argv[ 1 ],
-	root_node.length = strlen( argv[ 1 ]),
+	root_node.token.raw = argv[ 1 ],
+	root_node.token.length = strlen( argv[ 1 ]),
+	root_node.token.file = argv[ 1 ],
+	root_node.token.file_length = strlen( argv[ 1 ]),
 	root_node.kind = file_node,
 	parse_file( &root_node );
 	validate_globals( &root_node );
