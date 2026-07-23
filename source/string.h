@@ -63,9 +63,22 @@ void string_free( struct string* source ){
 	source->length = 0;
 }
 
+void string_alloc( struct string* source, i32 count ){
+	assert( source != NULL, "Malformed args" );
+	assert( count >= 0, "Malformed args" );
+	if( source->length + count >= source->allocated ){
+		i32 allocated = ( source->allocated + count ) * 2;
+		char* tmp = realloc( source->data, allocated );
+		assert( tmp != NULL, "Alloc failed" );
+		source->data = tmp;
+		source->allocated = allocated;
+	}
+}
+
 void string_append( struct string* source, char* src, i32 count ){
 	assert( source != NULL, "Malformed args" );
 	assert( src != NULL, "Malformed args" );
+	assert( count >= 0, "Malformed args" );
 	assert( source->allocated > source->length || source->length <= 0, "Malformed internal source data" );
 	if( count == 0 ) return;
 	if( source->length + count >= source->allocated ){
