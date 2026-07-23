@@ -11,7 +11,7 @@ output () {
 }
 
 # clean directory
-rm out.txt test.ll test &>/dev/null
+rm out.txt test.ll test test.txt &>/dev/null
 
 # compile test.sl to test.ll, redirect any errors to out.txt.
 ../../ssalc test.sl &>out.txt
