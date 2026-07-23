@@ -241,6 +241,9 @@ void compiler_error_token( struct source_file* file, struct raw_token* problem, 
 }
 
 bool char_array_equal( char* a, char* b, i32 n ){
+	assert( a != NULL, "Malformed argument." );
+	assert( b != NULL, "Malformed argument." );
+	assert( n > 0, "Malformed argument." );
 	for( i32 i = 0; i < n; i++ ){
 		if( a[ i ] == 0 || b[ i ] == 0 || a[ i ] != b[ i ] ){
 			return false;
@@ -848,33 +851,33 @@ void parse_file( struct ast_node* root ){
 	}
 }
 
-void validate_start_procedure( struct ast_node* local_root ){
-	assert( local_root != NULL, "Malformed argument." );
-	assert( local_root->raw != NULL, "Malformed argument data." );
-	assert( local_root->length > 0, "Malformed argument data." );
-	assert( local_root->child != NULL, "Malformed argument data." );
-	assert( local_root->kind == procedure_node, "Malformed argument data." );
-	assert( char_array_equal( local_root->raw, "start", 5 ), "Malformed argument data." );
-	struct ast_node* return_value = local_root->child->child;
-	while( return_value->kind != jump_node ){
-		assert( return_value->sibling != NULL, "Bug is parse stage." );
-		return_value = return_value->sibling;
-	}
+void validate_start_procedure( struct ast_node* root, struct ast_node* procedure ){
+	assert( root != NULL, "Malformed argument." );
+	assert( procedure != NULL, "Malformed argument." );
+	assert( procedure->raw != NULL, "Malformed argument data." );
+	assert( procedure->length > 0, "Malformed argument data." );
+	assert( procedure->child != NULL, "Malformed argument data." );
+	assert( procedure->kind == procedure_node, "Malformed argument data." );
+	assert( char_array_equal( procedure->raw, "start", 5 ), "Malformed argument data." );
+	struct ast_node* start_routine = procedure->child;
+	assert( start_routine->child != NULL, "Malformed argument data." );
+	assert( start_routine->kind == routine_node, "Malformed argument data." );
+	assert( char_array_equal( start_routine->raw, "start", 5 ), "Malformed argument data." );
 }
 
 void validate_globals( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->raw != NULL, "Malformed argument data." );
 	assert( root->length > 0, "Malformed argument data." );
-	assert( root->kind == file_node, "Malformed argument data." );
 	assert( root->child != NULL, "Malformed argument data." );
 	assert( root->sibling == NULL, "Not supporing multiple files." );
+	assert( root->kind == file_node, "Malformed argument data." );
 	struct ast_node* node = root->child;
 	assert( node->child != NULL, "Malformed argument data." );
 	assert( node->sibling == NULL, "Not supporing multiple globals." );
 	assert( node->kind == procedure_node, "Malformed argument data." );
 	assert( char_array_equal( node->raw, "start", 5 ), "Malformed argument data." );
-	validate_start_procedure( node );
+	validate_start_procedure( root, node );
 }
 
 i32 output_add_string( struct ast_node* root ){
