@@ -76,7 +76,9 @@ enum ast_node_kind {
 	type_node,
 	jump_node,
 	call_node,
+	list_separator_node,
 	literal_number_node,
+	literal_string_node,
 	member_node,
 	addition_node,
 	// not exaustive
@@ -106,6 +108,12 @@ struct ast_node_array {
 	i32 allocated;
 };
 
+struct ast_node_pointer_array {
+	struct ast_node** data;
+	i32 count;
+	i32 allocated;
+};
+
 struct source_file {
 	struct ast_node_array node_raw;
 	struct string source;
@@ -113,6 +121,12 @@ struct source_file {
 	i32 index;
 	i32 line;
 	i32 column;
+};
+
+struct output_context {
+	struct string file;
+	struct string literal_string;
+	i32 literal_string_number;
 };
 
 enum compiler_error_level {
@@ -124,44 +138,36 @@ enum compiler_error_level {
 
 #include "array.h"
 
+
+struct output_context output = { 0 };
 struct ast_node root_node = { 0 };
+
+char* node_kind_string( struct ast_node* node ){
+	switch( node->kind ){
+		case error_node:          return "error";
+		case file_node:           return "file";
+		case procedure_node:      return "procedure";
+		case routine_node:        return "routine";
+		case structure_node:      return "structure";
+		case union_node:          return "union";
+		case enumeration_node:    return "enumeration";
+		case argument_node:       return "argument";
+		case register_node:       return "register";
+		case type_node:           return "type";
+		case jump_node:           return "jump";
+		case call_node:           return "call";
+		case list_separator_node: return "list_separator";
+		case literal_number_node: return "literal_number";
+		case literal_string_node: return "literal_string";
+		case member_node:         return "member";
+		case addition_node:       return "addition";
+		default:                  assert( false, "Unknown node kind" );
+	}
+}
 
 void print_ast_node( struct ast_node* node, i32 depth ){
         assert( node != NULL, "Malformed argument." );
-	char* kind = NULL;
-	if ( node->kind == error_node ){
-		kind = "error";
-	} else if ( node->kind == file_node ){
-		kind = "file";
-	} else if ( node->kind == procedure_node ){
-		kind = "procedure";
-	} else if ( node->kind == routine_node ){
-		kind = "routine";
-	} else if ( node->kind == structure_node ){
-		kind = "structure";
-	} else if ( node->kind == union_node ){
-		kind = "union";
-	} else if ( node->kind == enumeration_node ){
-		kind = "enumeration";
-	} else if ( node->kind == argument_node ){
-		kind = "argument";
-	} else if ( node->kind == register_node ){
-		kind = "register";
-	} else if ( node->kind == type_node ){
-		kind = "type";
-	} else if ( node->kind == jump_node ){
-		kind = "jump";
-	} else if ( node->kind == call_node ){
-		kind = "call";
-	} else if ( node->kind == literal_number_node ){
-		kind = "literal_number";
-	} else if ( node->kind == member_node ){
-		kind = "member";
-	} else if ( node->kind == addition_node ){
-		kind = "addition";
-	} else {
-		assert( false, "Unknown node kind" );
-	}
+	char* kind = node_kind_string( node );
         printf( "%*c%s | %.*s\n", depth, ' ', kind, node->length, node->raw );
         if( node->child != NULL ){
                 print_ast_node( node->child, depth + 1 );
@@ -594,21 +600,27 @@ void build_node( struct ast_node* node, char* raw, i32 length, i32 line, i32 col
 
 enum ast_node_kind parse_expression_token_kind_to_node( struct source_file* file, struct raw_token token ){
 	switch( token.kind ){
-	case literal_number_token: return literal_number_node;
-	case identifier_token:     return register_node;
-	case addition_token:       return addition_node;
-	case member_token:         return member_node;
-	default:                   compiler_error_token( file, &token, error_level, "Expected expression." );
+		case literal_number_token: return literal_number_node;
+		case literal_string_token: return literal_string_node;
+		case identifier_token:     return register_node;
+		case addition_token:       return addition_node;
+		case member_token:         return member_node;
+		case list_separator_token: return list_separator_node;
+		default:                   compiler_error_token( file, &token, error_level, "Expected expression." );
 	}
 	return 0;
 }
 
 bool token_is_expression_leaf( struct raw_token token ){
-	return token.kind == literal_number_token || token.kind == identifier_token;
+	return token.kind == identifier_token ||
+	       token.kind == literal_number_token ||
+	       token.kind == literal_string_token;
 }
 
 bool token_is_binary_operator( struct raw_token token ){
-	return token.kind == addition_token || token.kind == member_token;
+	return token.kind == addition_token ||
+	       token.kind == member_token ||
+	       token.kind == list_separator_token;
 }
 
 struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind expected_post ){
@@ -618,30 +630,47 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 		compiler_error_token( file, &token, error_level, "Expected expression leaf." );
 	}
 	struct ast_node* left = ast_node_array_new( &file->node_raw );
+	struct ast_node* operator = { 0 };
+	struct ast_node* right = { 0 };
 	build_node( left, token.raw, token.length, token.line, token.column, parse_expression_token_kind_to_node( file, token ));
 	token = next_token( file );
 	if( !token_is_binary_operator( token )){
+		if( token.kind == argument_open_token ){
+			operator = left;
+			operator->sibling = parse_expression( file, argument_close_token );
+			operator->kind = call_node;
+			token = next_token( file );
+			if( token.kind == expected_post ){
+				return operator;
+			}
+			compiler_error_token( file, &token, error_level, "Expected expression binary operator or end." );
+		}
 		if( token.kind == expected_post ){
 			return left;
 		}
 		compiler_error_token( file, &token, error_level, "Expected expression binary operator." );
 	}
-	struct ast_node* operator = ast_node_array_new( &file->node_raw );
-	build_node( operator, token.raw, token.length, token.line, token.column, parse_expression_token_kind_to_node( file, token ));
-	token = next_token( file );
-	if( !token_is_expression_leaf( token )){
-		compiler_error_token( file, &token, error_level, "Expected expression leaf." );
-	}
-	struct ast_node* right = ast_node_array_new( &file->node_raw );
-	build_node( right, token.raw, token.length, token.line, token.column, parse_expression_token_kind_to_node( file, token ));
-	operator->sibling = left;
-	operator->child = right;
-	token = next_token( file );
-	if( token.kind == expected_post ){
-		return operator;
-	} else {
-		compiler_error_token( file, &token, error_level, "Expected expression end." );
-		return NULL;
+	while( 1 ){
+		operator = ast_node_array_new( &file->node_raw );
+		build_node( operator, token.raw, token.length, token.line, token.column, parse_expression_token_kind_to_node( file, token ));
+		token = next_token( file );
+		if( !token_is_expression_leaf( token )){
+			compiler_error_token( file, &token, error_level, "Expected expression leaf." );
+		}
+		right = ast_node_array_new( &file->node_raw );
+		build_node( right, token.raw, token.length, token.line, token.column, parse_expression_token_kind_to_node( file, token ));
+		operator->sibling = left;
+		operator->child = right;
+		token = next_token( file );
+		if( !token_is_binary_operator( token )){
+			if( token.kind == expected_post ){
+				return operator;
+			}
+			compiler_error_token( file, &token, error_level, "Expected expression binary operator or end." );
+		}
+		left = operator;
+		operator = NULL;
+		right = NULL;
 	}
 }
 
@@ -848,109 +877,170 @@ void validate_globals( struct ast_node* root ){
 	validate_start_procedure( node );
 }
 
-void output_procedure( struct string* file, struct ast_node* root ){
+i32 output_add_string( struct ast_node* root ){
+	assert( root != NULL, "Malformed argument." );
+	assert( root->kind == literal_string_node, "Malformed argument." );
+	string_append( &output.literal_string, "@.literal_string.", 17 );
+	string_alloc( &output.literal_string, 32 );
+	i32 string_added = sprintf( &output.literal_string.data[ output.literal_string.length ], "%d", output.literal_string_number );
+	output.literal_string.length += string_added;
+	string_append( &output.literal_string, " = global [ ", 12 );
+	string_alloc( &output.literal_string, 32 );
+	string_added = sprintf( &output.literal_string.data[ output.literal_string.length ], "%d", root->length - 2 );
+	output.literal_string.length += string_added;
+	string_append( &output.literal_string, " x i8 ] c", 9 );
+	string_append( &output.literal_string, root->raw, root->length );
+	output.literal_string_number += 1;
+	return output.literal_string_number - 1;
+}
+
+void output_procedure_call( struct ast_node* root ){
+	assert( root != NULL, "Malformed argument." );
+	assert( root->kind == call_node, "Malformed argument." );
+	string_append( &output.file, "call ", 5 );
+	if( char_array_equal( root->raw, "write_syscall", 13 )){
+		string_append( &output.file, "i64 @write_syscall( i64 ", 24 );
+		string_append( &output.file, root->sibling->sibling->sibling->raw, root->sibling->sibling->sibling->length );
+		string_append( &output.file, ", ptr ", 6 );
+		string_append( &output.file, "@.literal_string.", 17 );
+		i32 index = output_add_string( root->sibling->sibling->child );
+		string_alloc( &output.file, 32 );
+		i32 string_added = sprintf( &output.file.data[ output.file.length ], "%d", index );
+		output.file.length += string_added;
+		string_append( &output.file, ", i64 ", 6 );
+		string_append( &output.file, root->sibling->child->raw, root->sibling->child->length );
+		string_append( &output.file, " )", 2 );
+	} else {
+		assert( false, "Not supporting arbitrary procedure calls yet." );
+	}
+}
+
+void output_register( struct ast_node* root ){
+	assert( root != NULL, "Malformed argument." );
+	assert( root->kind == register_node, "Malformed argument." );
+	string_append( &output.file, "\t%", 2 );
+	string_append( &output.file, root->raw, root->length );
+	string_append( &output.file, " = ", 3 );
+	struct ast_node* value = root->child->sibling;
+	if( value->kind == register_node ){
+		string_append( &output.file, "add ", 4 );
+		string_append( &output.file, root->child->raw, root->child->length );
+		string_append( &output.file, " %", 2 );
+		string_append( &output.file, value->raw, value->length );
+		string_append( &output.file, ", 0", 3 );
+	} else if ( value->kind == literal_number_node ){
+		string_append( &output.file, "add ", 4 );
+		string_append( &output.file, root->child->raw, root->child->length );
+		string_append( &output.file, " ", 1 );
+		string_append( &output.file, value->raw, value->length );
+		string_append( &output.file, ", 0", 3 );
+	} else if ( value->kind == addition_node ){
+		string_append( &output.file, "add ", 4 );
+		string_append( &output.file, root->child->raw, root->child->length );
+		string_append( &output.file, " ", 1 );
+		if( value->sibling->kind == register_node ){
+			string_append( &output.file, "%", 1 );
+			string_append( &output.file, value->sibling->raw, value->sibling->length );
+		} else if ( value->sibling->kind == literal_number_node ){
+			string_append( &output.file, value->sibling->raw, value->sibling->length );
+		} else {
+			assert( false, "Bad addition root not valid for now." );
+		}
+		string_append( &output.file, ", ", 2 );
+		if( value->child->kind == register_node ){
+			string_append( &output.file, "%", 1 );
+			string_append( &output.file, value->child->raw, value->child->length );
+		} else if ( value->child->kind == literal_number_node ){
+			string_append( &output.file, value->child->raw, value->child->length );
+		} else {
+			assert( false, "Bad addition root not valid for now." );
+		}
+	} else if ( value->kind == call_node ){
+		output_procedure_call( value );
+	} else {
+		assert( false, "Bad root not valid for now." );
+	}
+	string_append( &output.file, "\n", 1 );
+}
+
+void output_jump( struct ast_node* root, struct ast_node* procedure ){
+	assert( root != NULL, "Malformed argument." );
+	assert( root->kind == jump_node, "Malformed argument." );
+	assert( procedure != NULL, "Malformed argument." );
+	assert( procedure->kind == procedure_node, "Malformed argument data." );
+	assert( char_array_equal( root->raw, "return", 6 ), "Bad root not jump return for now." );
+	if( root->child->kind == addition_node ){
+		string_append( &output.file, "\t%", 2 );
+		string_append( &output.file, root->raw, root->length );
+		string_append( &output.file, ".1 = add ", 9 );
+		string_append( &output.file, procedure->child->child->raw, procedure->child->child->length );
+		string_append( &output.file, " ", 1 );
+		if( root->child->sibling->kind == register_node ){
+			string_append( &output.file, "%", 1 );
+			string_append( &output.file, root->child->sibling->raw, root->child->sibling->length );
+		} else if ( root->child->sibling->kind == literal_number_node ){
+			string_append( &output.file, root->child->sibling->raw, root->child->sibling->length );
+		} else {
+			assert( false, "Bad addition root not valid for now." );
+		}
+		string_append( &output.file, ", ", 2 );
+		if( root->child->child->kind == register_node ){
+			string_append( &output.file, "%", 1 );
+			string_append( &output.file, root->child->child->raw, root->child->child->length );
+		} else if ( root->child->child->kind == literal_number_node ){
+			string_append( &output.file, root->child->child->raw, root->child->child->length );
+		} else {
+			assert( false, "Bad addition root not valid for now." );
+		}
+		string_append( &output.file, "\n\tret ", 6 );
+		string_append( &output.file, procedure->child->child->raw, procedure->child->child->length );
+		string_append( &output.file, " %", 2 );
+		string_append( &output.file, root->raw, root->length );
+		string_append( &output.file, ".1", 2 );
+	} else if( root->child->kind == member_node ){
+		assert( char_array_equal( root->child->sibling->raw, "argument", 8 ), "Only supporting argument.count member." );
+		assert( char_array_equal( root->child->child->raw, "count", 5 ), "Only supporting argument.count member." );
+		string_append( &output.file, "\tret ", 5 );
+		string_append( &output.file, procedure->child->child->raw, procedure->child->child->length );
+		string_append( &output.file, " %argument.count", 16 );
+	} else {
+		string_append( &output.file, "\tret ", 5 );
+		string_append( &output.file, procedure->child->child->raw, procedure->child->child->length );
+		string_append( &output.file, " ", 1 );
+		if( root->child->kind == register_node ){
+			string_append( &output.file, "%", 1 );
+			string_append( &output.file, root->child->raw, root->child->length );
+		} else if ( root->child->kind == literal_number_node ){
+			string_append( &output.file, root->child->raw, root->child->length );
+		} else {
+			assert( false, "Bad root not valid return for now." );
+		}
+	}
+	string_append( &output.file, "\n", 1 );
+}
+
+void output_procedure( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->kind == procedure_node, "Malformed argument data." );
-	string_append( file, "define ", 7 );
-	string_append( file, root->child->child->raw, root->child->child->length );
-	string_append( file, " @", 2 );
-	string_append( file, root->raw, root->length );
-	string_append( file, "( ", 2 );
+	string_append( &output.file, "define ", 7 );
+	string_append( &output.file, root->child->child->raw, root->child->child->length );
+	string_append( &output.file, " @", 2 );
+	string_append( &output.file, root->raw, root->length );
+	string_append( &output.file, "( ", 2 );
 	assert( *root->child->child->sibling->child->raw == '@', "Bad procedure argument for now." );
 	assert( *root->child->child->sibling->child->child->raw == '@', "Bad procedure argument for now." );
-	string_append( file, "ptr %", 5 );
-	string_append( file, root->child->child->sibling->raw, root->child->child->sibling->length );
-	string_append( file, ".data, ", 7 );
-	string_append( file, "i64 %", 5 );
-	string_append( file, root->child->child->sibling->raw, root->child->child->sibling->length );
-	string_append( file, ".count ){\n", 10 );
+	string_append( &output.file, "ptr %", 5 );
+	string_append( &output.file, root->child->child->sibling->raw, root->child->child->sibling->length );
+	string_append( &output.file, ".data, ", 7 );
+	string_append( &output.file, "i64 %", 5 );
+	string_append( &output.file, root->child->child->sibling->raw, root->child->child->sibling->length );
+	string_append( &output.file, ".count ){\n", 10 );
 	struct ast_node* statement = root->child->child->sibling->sibling;
 	while( 1 ){
 		if( statement->kind == register_node ){
-			string_append( file, "\t%", 2 );
-			string_append( file, statement->raw, statement->length );
-			string_append( file, " = add ", 7 );
-			string_append( file, statement->child->raw, statement->child->length );
-			string_append( file, " ", 1 );
-			if( statement->child->sibling->kind == register_node ){
-				string_append( file, "%", 1 );
-				string_append( file, statement->child->sibling->raw, statement->child->sibling->length );
-				string_append( file, ", 0", 3 );
-			} else if ( statement->child->sibling->kind == literal_number_node ){
-				string_append( file, statement->child->sibling->raw, statement->child->sibling->length );
-				string_append( file, ", 0", 3 );
-			} else if ( statement->child->sibling->kind == addition_node ){
-				if( statement->child->sibling->sibling->kind == register_node ){
-					string_append( file, "%", 1 );
-					string_append( file, statement->child->sibling->sibling->raw, statement->child->sibling->sibling->length );
-				} else if ( statement->child->sibling->sibling->kind == literal_number_node ){
-					string_append( file, statement->child->sibling->sibling->raw, statement->child->sibling->sibling->length );
-				} else {
-					assert( false, "Bad addition statement not valid for now." );
-				}
-				string_append( file, ", ", 2 );
-				if( statement->child->sibling->child->kind == register_node ){
-					string_append( file, "%", 1 );
-					string_append( file, statement->child->sibling->child->raw, statement->child->sibling->child->length );
-				} else if ( statement->child->sibling->child->kind == literal_number_node ){
-					string_append( file, statement->child->sibling->child->raw, statement->child->sibling->child->length );
-				} else {
-					assert( false, "Bad addition statement not valid for now." );
-				}
-			} else {
-				assert( false, "Bad statement not valid for now." );
-			}
-				string_append( file, "\n", 1 );
+			output_register( statement );
 		} else if( statement->kind == jump_node ){
-			assert( char_array_equal( statement->raw, "return", 6 ), "Bad statement not jump return for now." );
-			if( statement->child->kind == addition_node ){
-				string_append( file, "\t%", 2 );
-				string_append( file, statement->raw, statement->length );
-				string_append( file, ".1 = add ", 9 );
-				string_append( file, root->child->child->raw, root->child->child->length );
-				string_append( file, " ", 1 );
-				if( statement->child->sibling->kind == register_node ){
-					string_append( file, "%", 1 );
-					string_append( file, statement->child->sibling->raw, statement->child->sibling->length );
-				} else if ( statement->child->sibling->kind == literal_number_node ){
-					string_append( file, statement->child->sibling->raw, statement->child->sibling->length );
-				} else {
-					assert( false, "Bad addition statement not valid for now." );
-				}
-				string_append( file, ", ", 2 );
-				if( statement->child->child->kind == register_node ){
-					string_append( file, "%", 1 );
-					string_append( file, statement->child->child->raw, statement->child->child->length );
-				} else if ( statement->child->child->kind == literal_number_node ){
-					string_append( file, statement->child->child->raw, statement->child->child->length );
-				} else {
-					assert( false, "Bad addition statement not valid for now." );
-				}
-				string_append( file, "\n\tret ", 6 );
-				string_append( file, root->child->child->raw, root->child->child->length );
-				string_append( file, " %", 2 );
-				string_append( file, statement->raw, statement->length );
-				string_append( file, ".1", 2 );
-			} else if( statement->child->kind == member_node ){
-				assert( char_array_equal( statement->child->sibling->raw, "argument", 8 ), "Only supporting argument.count member." );
-				assert( char_array_equal( statement->child->child->raw, "count", 5 ), "Only supporting argument.count member." );
-				string_append( file, "\tret ", 5 );
-				string_append( file, root->child->child->raw, root->child->child->length );
-				string_append( file, " %argument.count", 16 );
-			} else {
-				string_append( file, "\tret ", 5 );
-				string_append( file, root->child->child->raw, root->child->child->length );
-				string_append( file, " ", 1 );
-				if( statement->child->kind == register_node ){
-					string_append( file, "%", 1 );
-					string_append( file, statement->child->raw, statement->child->length );
-				} else if ( statement->child->kind == literal_number_node ){
-					string_append( file, statement->child->raw, statement->child->length );
-				} else {
-					assert( false, "Bad statement not valid return for now." );
-				}
-			}
-			string_append( file, "\n", 1 );
+			output_jump( statement, root );
 			break;
 		} else {
 			assert( false, "Bad statement not jump for now." );
@@ -958,18 +1048,22 @@ void output_procedure( struct string* file, struct ast_node* root ){
 		assert( statement->sibling != NULL, "Invalid ast." );
 		statement = statement->sibling;
 	}
-	string_append( file, "}\n", 2 );
+	string_append( &output.file, "}\n", 2 );
 }
 
-void output( struct ast_node* root ){
+void output_llvm( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->kind == file_node, "Malformed argument data." );
-	struct string file = { 0 };
-	char llvmir_start[] = "target triple = \"x86_64-unknown-linux-gnu\"\n\n";
-	string_append( &file, llvmir_start, sizeof( llvmir_start ) - 1 );
-	output_procedure( &file, root->child );
+	char llvmir_start[] = "target triple = \"x86_64-unknown-linux-gnu\"\n\ndeclare i64 @write_syscall( i64, ptr, i64 )\n\n";
+	string_append( &output.file, llvmir_start, sizeof( llvmir_start ) - 1 );
+	output_procedure( root->child );
+	string_append( &output.file, "\n", 1 );
+	if( output.literal_string.length > 0 ){
+		string_append( &output.file, output.literal_string.data, output.literal_string.length );
+		string_append( &output.file, "\n", 1 );
+	}
 	root->raw[ root->length - 2 ] = 'l';
-	bool error = string_to_file( &file, root->raw );
+	bool error = string_to_file( &output.file, root->raw );
 	if( error ){
 		printf( "%s%sError%s Unable to write to file \"%s\"%s\n\n", ansi_bold_start, ansi_foreground_red, ansi_foreground_default, root->raw, ansi_bold_end );
 	}
@@ -985,7 +1079,7 @@ i32 main( i32 argc, char* argv[] ){
 	root_node.kind = file_node,
 	parse_file( &root_node );
 	validate_globals( &root_node );
-	output( &root_node );
+	output_llvm( &root_node );
 #ifdef DEBUG
 	print_ast();
 #endif
