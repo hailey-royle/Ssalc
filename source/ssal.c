@@ -283,7 +283,7 @@ struct raw_token next_token( struct source_file* file ){
 	if( file->index >= file->source.length ){
 		return token;
 	}
-	if(( '\\' == file->source.data[ file->index ]) && ( '{' != file->source.data[ file->index + 1 ])){
+	if(( '\\' == file->source.data[ file->index ]) && ( '{' == file->source.data[ file->index + 1 ])){
 		bool in_string = false;
 		do{
 			if( '\n' == file->source.data[ file->index ]){
@@ -296,7 +296,7 @@ struct raw_token next_token( struct source_file* file ){
 			if(( '"' == file->source.data[ file->index ]) && ( '\\' != file->source.data[ file->index - 1 ])){
 				in_string = ( in_string == true ) ? false : true;
 			}
-		} while(( in_string == false ) && ( '}' == file->source.data[ file->index ]) && ( '\\' != file->source.data[ file->index + 1 ]));
+		} while( !(( in_string == false ) && ( '}' == file->source.data[ file->index ]) && ( '\\' == file->source.data[ file->index + 1 ])));
 		file->column += 2;
 		file->index += 2;
 		if( '"' == file->source.data[ file->index ]){
