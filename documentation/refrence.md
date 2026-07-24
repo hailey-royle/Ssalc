@@ -144,7 +144,7 @@ The first character must not be an number.
 - `~`  - bitwise not operator  
 - `&`  - bitwise and operator  
 - `|`  - bitwise or operator  
-- ````` - bitwise xor operator  
+- `` ` `` - bitwise xor operator  
 - `~~` - logical not operator  
 - `&&` - logical and operator  
 - `||` - logical or operator  
