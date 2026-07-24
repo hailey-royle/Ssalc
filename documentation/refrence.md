@@ -113,47 +113,47 @@ The first character must not be an number.
 
 ## Operators and Punctuation
 
-`\{` - comment open  
-`}\` - comment close  
-`[`  - argument open  
-`]`  - argument close  
-`(`  - expression open  
-`)`  - expression close  
-`{`  - scope open  
-`}`  - scope close  
-`,`  - list seperator  
-`;`  - statement end  
-`:`  - result  
-`!`  - jump call  
-`=`  - assignment  
-`#`  - execute at compilation  
-`"`  - string open / close  
-`'`  - code open / close  
-`.`  - composite member operator  
-`^`  - pointer type / refrence operator / derefrence operator  
-`@`  - array type / index operator  
-`?`  - conditional  
-`$`  - selection  
-`+`  - addition operator  
-`-`  - subtraction / negation operator  
-`*`  - multiplication operator  
-`/`  - divistion operator  
-`%`  - modulo operator  
-`<<` - shift left operator  
-`>>` - shift right operator  
-`~`  - bitwise not operator  
-`&`  - bitwise and operator  
-`|`  - bitwise or operator  
-`\`` - bitwise xor operator  
-`~~` - logical not operator  
-`&&` - logical and operator  
-`||` - logical or operator  
-`==` - equals operator  
-`<`  - less then operator  
-`>`  - greator then operator  
-`<=` - less then or equals operator  
-`>=` - greator then or equals operator  
-`<>` - less or greator then operator  
+- `\{` - comment open  
+- `}\` - comment close  
+- `[`  - argument open  
+- `]`  - argument close  
+- `(`  - expression open  
+- `)`  - expression close  
+- `{`  - scope open  
+- `}`  - scope close  
+- `,`  - list seperator  
+- `;`  - statement end  
+- `:`  - result  
+- `!`  - jump call  
+- `=`  - assignment  
+- `#`  - execute at compilation  
+- `"`  - string open / close  
+- `'`  - code open / close  
+- `.`  - composite member operator  
+- `^`  - pointer type / refrence operator / derefrence operator  
+- `@`  - array type / index operator  
+- `?`  - conditional  
+- `$`  - selection  
+- `+`  - addition operator  
+- `-`  - subtraction / negation operator  
+- `*`  - multiplication operator  
+- `/`  - divistion operator  
+- `%`  - modulo operator  
+- `<<` - shift left operator  
+- `>>` - shift right operator  
+- `~`  - bitwise not operator  
+- `&`  - bitwise and operator  
+- `|`  - bitwise or operator  
+- ``` - bitwise xor operator  
+- `~~` - logical not operator  
+- `&&` - logical and operator  
+- `||` - logical or operator  
+- `==` - equals operator  
+- `<`  - less then operator  
+- `>`  - greator then operator  
+- `<=` - less then or equals operator  
+- `>=` - greator then or equals operator  
+- `<>` - less or greator then operator  
 
 
 ## Procedure
