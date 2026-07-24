@@ -6,7 +6,7 @@
 
 start procedure[ i64 : argumnet @@i8 ]
 {
-	write_count i64 = write[ standard_out, "Hello World!\n", 13 ];
+	write_count i64 = write[ standard_out, "Hello World!\n" ];
 	!return[ 0 ];
 }
 ```
@@ -27,11 +27,10 @@ Every procedure must have a body, which is wrapped in `{}`.
 This `start` procedure has only one block, with two statments.
 All statments must end in a `;`.
 
-The first statment is `write_count i64 = write[ standard_out, "Hello World!\n", 13 ];`.
-This describes a call to the procedure `write`, which is defined as `write procedure[ destination file, string @i8, count i64 : i64 ]`.
+The first statment is `write_count i64 = write[ standard_out, "Hello World!\n" ];`.
+This describes a call to the procedure `write`, which is defined as `write procedure[ i64 : destination file, string @i8 ]`.
 `standard_out` is the file that will be written to.
 `"Hello World!\n"` is a litteral string, which will be written to the file.
-`13` is the number of bytes from the string that will be written.
 `write_count` is the number of bytes written, all return values must be assigned even if they are not used.
 
 The second statment is `!return[ 0 ]`
