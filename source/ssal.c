@@ -75,7 +75,7 @@ enum ast_node_kind {
 	register_node,
 	type_node,
 	jump_node,
-	call_node,
+	procedure_call_node,
 	list_separator_node,
 	literal_number_node,
 	literal_string_node,
@@ -138,8 +138,8 @@ enum compiler_error_level {
 
 #include "array.h"
 
-struct output_context output = { 0 };
 struct ast_node root_node = { 0 };
+struct output_context output = { 0 };
 
 char* node_kind_string( struct ast_node* node ){
 	switch( node->kind ){
@@ -154,7 +154,7 @@ char* node_kind_string( struct ast_node* node ){
 		case register_node:       return "register";
 		case type_node:           return "type";
 		case jump_node:           return "jump";
-		case call_node:           return "call";
+		case procedure_call_node: return "call";
 		case list_separator_node: return "list_separator";
 		case literal_number_node: return "literal_number";
 		case literal_string_node: return "literal_string";
@@ -186,8 +186,8 @@ void compiler_error( struct raw_token problem, enum compiler_error_level level, 
         assert( problem.file != NULL, "Malformed argument." );
         assert( problem.raw != NULL, "Malformed argument." );
         assert( problem.length > 0, "Malformed argument." );
-        assert( problem.column > 0, "Malformed argument." );
-        assert( problem.line > 0, "Malformed argument." );
+        assert( problem.column >= 0, "Malformed argument." );
+        assert( problem.line >= 0, "Malformed argument." );
         assert( format != NULL, "Malformed argument." );
 	if( level == error_level ){
 		printf( "%s%sError%s ", ansi_bold_start, ansi_foreground_red, ansi_foreground_default );
@@ -236,9 +236,6 @@ bool char_array_equal( char* a, char* b, i32 n ){
 		if( a[ i ] == 0 || b[ i ] == 0 || a[ i ] != b[ i ] ){
 			return false;
 		}
-	}
-	if( a[ n ] == b[ n ] ){
-		return false;
 	}
 	return true;
 }
@@ -623,7 +620,7 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 		if( token.kind == argument_open_token ){
 			operator = left;
 			operator->sibling = parse_expression( file, argument_close_token );
-			operator->kind = call_node;
+			operator->kind = procedure_call_node;
 			token = next_token( file );
 			if( token.kind == expected_post ){
 				return operator;
@@ -808,8 +805,140 @@ void parse_file( struct ast_node* root ){
 	}
 }
 
-void validate_start_procedure( struct ast_node* root, struct ast_node* procedure ){
-	assert( root != NULL, "Malformed argument." );
+bool node_is_operator( struct ast_node* node ){
+	return node->kind == addition_node ||
+	       node->kind == member_node;
+}
+
+void add_avalible_register( struct ast_node_pointer_array* available_register, struct ast_node* node ){
+	assert( available_register != NULL, "Malformed argument." );
+	assert( node != NULL, "Malformed argument." );
+	struct ast_node** ptr = ast_node_pointer_array_new( available_register );
+	*ptr = node;
+}
+
+void validate_register_type( struct ast_node* type, struct ast_node* value, struct ast_node_pointer_array* available_register ){
+	assert( type != NULL, "Malformed argument." );
+	assert( value != NULL, "Malformed argument." );
+	assert( available_register != NULL, "Malformed argument." );
+	struct ast_node** result = ast_node_pointer_array_search_derefrence( available_register, value );
+	compiler_assert( result != NULL, value->token, error_level, "Register not declared." );
+	compiler_assert( type->token.length = (*result)->child->token.length, value->token, error_level, "Register value is diffrent type." );
+	bool types_equal = char_array_equal( type->token.raw, (*result)->child->token.raw, type->token.length );
+	compiler_assert( types_equal, value->token, error_level, "Register value is diffrent type." );
+}
+
+void validate_expression( struct ast_node* expression, struct ast_node* type, struct ast_node_pointer_array* available_register ){
+	assert( expression != NULL, "Malformed argument." );
+	assert( node_is_operator( expression ), "Malformed argument." );
+	assert( type != NULL, "Malformed argument." );
+	assert( type->kind == type_node, "Malformed argument." );
+	assert( available_register != NULL, "Malformed argument." );
+	if( expression->kind == member_node ){
+		struct ast_node** result = ast_node_pointer_array_search_derefrence( available_register, expression->sibling );
+		compiler_assert( result != NULL, expression->sibling->token, error_level, "Register not declared." );
+		compiler_assert( char_array_equal( (*result)->child->token.raw, "@", 1 ), expression->token, error_level, "Register value is diffrent type." );
+		compiler_assert( char_array_equal( (*result)->child->child->token.raw, "@", 1 ), expression->token, error_level, "Register value is diffrent type." );
+		compiler_assert( char_array_equal( (*result)->child->child->child->token.raw, "i8", 2 ), expression->token, error_level, "Register value is diffrent type." );
+		if( char_array_equal( expression->child->token.raw, "data", 4 )){
+			assert( 0, "Unreachable" );
+		} else if( char_array_equal( expression->child->token.raw, "count", 5 )){
+			compiler_assert( char_array_equal( type->token.raw, "i64", 3 ), expression->child->token, error_level, "Register value is different type." );
+		} else {
+			compiler_error( expression->child->token, error_level, "Register value is different type." );
+		}
+		return;
+	}
+	if( node_is_operator( expression->sibling )){
+		validate_expression( expression->sibling, type, available_register );
+	} else if( expression->sibling->kind == register_node ){
+		validate_register_type( type, expression->sibling, available_register );
+	} else if( expression->sibling->kind == literal_number_node ){
+		// overflow warning
+	} else {
+		compiler_error( expression->sibling->token, error_level, "Invalid operator opperand." );
+	}
+	if( node_is_operator( expression->child )){
+		validate_expression( expression->child, type, available_register );
+	} else if( expression->child->kind == register_node ){
+		validate_register_type( type, expression->child, available_register );
+	} else if( expression->child->kind == literal_number_node ){
+		// overflow warning
+	} else {
+		compiler_error( expression->child->token, error_level, "Invalid operator opperand." );
+	}
+}
+
+void validate_routine( struct ast_node* routine, struct ast_node* return_type, struct ast_node_pointer_array available_register ){
+	assert( routine != NULL, "Malformed argument." );
+	assert( routine->child != NULL, "Malformed argument data." );
+	assert( routine->kind == routine_node, "Malformed argument data." );
+	assert( return_type != NULL, "Malformed argument." );
+	assert( return_type->kind == type_node, "Malformed argument data." );
+	compiler_assert( routine->child == return_type, return_type->token, error_level, "Temp, only one routine, existing return type." );
+	struct ast_node* argument = routine->child->sibling;
+	compiler_assert( argument->kind == argument_node, argument->token, error_level, "Temp, only one argument." );
+	add_avalible_register( &available_register, argument );
+	struct ast_node* statement = argument->sibling;
+	while( 1 ){
+		if( statement->kind == jump_node ){
+			if( node_is_operator( statement->child )){
+				validate_expression( statement->child, return_type, &available_register );
+			} else if( statement->child->kind == register_node ){
+				validate_register_type( return_type, statement->child, &available_register );
+			} else if( statement->child->kind == literal_number_node ){
+				// overflow warning
+			} else {
+				compiler_error( statement->child->token, error_level, "Return type does not match." );
+			}
+			break;
+		} else if( statement->kind == register_node ){
+			struct ast_node* register_type = statement->child;
+			compiler_assert( register_type->kind == type_node, register_type->token, error_level, "Register must have type." );
+			struct ast_node* value = statement->child->sibling;
+			if( node_is_operator( value )){
+				validate_expression( value, register_type, &available_register );
+			} else if( value->kind == procedure_call_node ){
+				compiler_assert( char_array_equal( value->token.raw, "write_syscall", 13 ), value->token, error_level, "Procedure not defined." );
+				compiler_assert( value->sibling->kind == list_separator_node, value->token, error_level, "Procedure signature does not match." );
+				compiler_assert( value->sibling->child->kind == literal_string_node, value->token, error_level, "Procedure signature does not match." );
+				if( value->sibling->sibling->kind == literal_number_node ){
+					// overflow warning
+				} else if( value->sibling->sibling->kind == register_node ){
+					validate_register_type( register_type, value->sibling->sibling, &available_register );
+				} else {
+					compiler_error( value->token, error_level, "Procedure signature does not match." );
+				}
+			} else if( value->kind == register_node ){
+				validate_register_type( register_type, value, &available_register );
+			} else if( value->kind == literal_number_node ){
+				// overflow warning
+			} else {
+				compiler_error( value->token, error_level, "Unexpected register value." );
+			}
+			add_avalible_register( &available_register, statement );
+		}
+		assert( statement->sibling != NULL, "Parser error." );
+		statement = statement->sibling;
+	}
+	free( available_register.data );
+}
+
+void validate_procedure_body( struct ast_node* procedure ){
+	assert( procedure != NULL, "Malformed argument." );
+	assert( procedure->token.raw != NULL, "Malformed argument data." );
+	assert( procedure->token.length > 0, "Malformed argument data." );
+	assert( procedure->child != NULL, "Malformed argument data." );
+	assert( procedure->kind == procedure_node, "Malformed argument data." );
+	struct ast_node* first_routine = procedure->child;
+	compiler_assert( first_routine->kind == routine_node, first_routine->token, error_level, "Temp: procedure must have one return value." );
+	struct ast_node* return_type = first_routine->child;
+	compiler_assert( return_type->kind == type_node, return_type->token, error_level, "Temp: procedure must have one return value." );
+	struct ast_node_pointer_array available_register = { 0 };
+	validate_routine( first_routine, return_type, available_register );
+}
+
+void validate_start_procedure( struct ast_node* procedure ){
 	assert( procedure != NULL, "Malformed argument." );
 	assert( procedure->token.raw != NULL, "Malformed argument data." );
 	assert( procedure->token.length > 0, "Malformed argument data." );
@@ -820,6 +949,40 @@ void validate_start_procedure( struct ast_node* root, struct ast_node* procedure
 	assert( start_routine->child != NULL, "Malformed argument data." );
 	assert( start_routine->kind == routine_node, "Malformed argument data." );
 	assert( char_array_equal( start_routine->token.raw, "start", 5 ), "Malformed argument data." );
+	struct ast_node* procedure_return = start_routine->child;
+	compiler_assert( procedure_return->kind == type_node, procedure_return->token,  error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	compiler_assert( char_array_equal( procedure_return->token.raw, "i64", 3 ), procedure_return->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	compiler_assert( procedure_return->sibling != NULL, procedure_return->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	struct ast_node* argument = procedure_return->sibling;
+	compiler_assert( argument->kind == argument_node, argument->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	compiler_assert( argument->child != NULL, argument->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	struct ast_node* argument_type = argument->child;
+	compiler_assert( argument_type->kind == type_node, argument_type->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	compiler_assert( char_array_equal( argument_type->token.raw, "@", 1 ), argument_type->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	compiler_assert( argument_type->child != NULL, argument_type->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	argument_type = argument_type->child;
+	compiler_assert( argument_type->kind == type_node, argument_type->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	compiler_assert( char_array_equal( argument_type->token.raw, "@", 1 ), argument_type->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	compiler_assert( argument_type->child != NULL, argument_type->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	argument_type = argument_type->child;
+	compiler_assert( argument_type->kind == type_node, argument_type->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	compiler_assert( char_array_equal( argument_type->token.raw, "i8", 2 ), argument_type->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	compiler_assert( argument_type->child == NULL, argument_type->token, error_level, 
+	                 "'start' procedure must have signatrue 'start procedure[ i64 : argument @@i8 ]'." );
+	validate_procedure_body( procedure );
 }
 
 void validate_globals( struct ast_node* root ){
@@ -829,12 +992,11 @@ void validate_globals( struct ast_node* root ){
 	assert( root->child != NULL, "Malformed argument data." );
 	assert( root->sibling == NULL, "Not supporing multiple files." );
 	assert( root->kind == file_node, "Malformed argument data." );
-	struct ast_node* node = root->child;
-	assert( node->child != NULL, "Malformed argument data." );
-	assert( node->sibling == NULL, "Not supporing multiple globals." );
-	assert( node->kind == procedure_node, "Malformed argument data." );
-	assert( char_array_equal( node->token.raw, "start", 5 ), "Malformed argument data." );
-	validate_start_procedure( root, node );
+	struct ast_node* global = root->child;
+	assert( global->child != NULL, "Malformed argument data." );
+	assert( global->sibling == NULL, "Not supporing multiple globals." );
+	assert( global->kind == procedure_node, "Malformed argument data." );
+	validate_start_procedure( global );
 }
 
 i32 output_add_string( struct ast_node* root ){
@@ -856,19 +1018,20 @@ i32 output_add_string( struct ast_node* root ){
 
 void output_procedure_call( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
-	assert( root->kind == call_node, "Malformed argument." );
+	assert( root->kind == procedure_call_node, "Malformed argument." );
 	string_append( &output.file, "call ", 5 );
 	if( char_array_equal( root->token.raw, "write_syscall", 13 )){
 		string_append( &output.file, "i64 @write_syscall( i64 ", 24 );
-		string_append( &output.file, root->sibling->sibling->sibling->token.raw, root->sibling->sibling->sibling->token.length );
-		string_append( &output.file, ", ptr ", 6 );
-		string_append( &output.file, "@.literal_string.", 17 );
-		i32 index = output_add_string( root->sibling->sibling->child );
+		string_append( &output.file, root->sibling->sibling->token.raw, root->sibling->sibling->token.length );
+		string_append( &output.file, ", ptr @.literal_string.", 23 );
+		i32 index = output_add_string( root->sibling->child );
 		string_alloc( &output.file, 32 );
 		i32 string_added = sprintf( &output.file.data[ output.file.length ], "%d", index );
 		output.file.length += string_added;
 		string_append( &output.file, ", i64 ", 6 );
-		string_append( &output.file, root->sibling->child->token.raw, root->sibling->child->token.length );
+		string_alloc( &output.file, 32 );
+		string_added = sprintf( &output.file.data[ output.file.length ], "%d", root->sibling->child->token.length - 2 );
+		output.file.length += string_added;
 		string_append( &output.file, " )", 2 );
 	} else {
 		assert( false, "Not supporting arbitrary procedure calls yet." );
@@ -915,7 +1078,7 @@ void output_register( struct ast_node* root ){
 		} else {
 			assert( false, "Bad addition root not valid for now." );
 		}
-	} else if ( value->kind == call_node ){
+	} else if ( value->kind == procedure_call_node ){
 		output_procedure_call( value );
 	} else {
 		assert( false, "Bad root not valid for now." );

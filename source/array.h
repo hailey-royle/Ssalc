@@ -20,53 +20,76 @@ struct type_array {
 
   // Copy this function below.
 struct ast_node* ast_node_array_new( struct ast_node_array* array ){
-        assert( array != NULL, "Malformed argument." );
-        assert( array->count >= 0, "Malformed data." );
-        assert( array->allocated >= 0, "Malformed data." );
-        assert( array->count <= array->allocated, "Malformed data." );
-        if( array->count == array->allocated ){
-                i32 new_allocated = ( array->allocated == 0 ) ? 256 : array->allocated * 2;
-                array->data = realloc( array->data, sizeof( array->data[ 0 ]) * new_allocated );
-                assert( array->data != NULL, "alloc failed." );
-                memset( &array->data[ array->allocated ], 0, sizeof( array->data[ 0 ] ) * ( new_allocated - array->allocated ));
-                array->allocated = new_allocated;
-        }
-        array->count += 1;
-        return &array->data[ array->count - 1 ];
+	assert( array != NULL, "Malformed argument." );
+	assert( array->count >= 0, "Malformed data." );
+	assert( array->allocated >= 0, "Malformed data." );
+	assert( array->count <= array->allocated, "Malformed data." );
+	if( array->count == array->allocated ){
+		i32 new_allocated = ( array->allocated == 0 ) ? 256 : array->allocated * 2;
+		array->data = realloc( array->data, sizeof( array->data[ 0 ]) * new_allocated );
+		assert( array->data != NULL, "alloc failed." );
+		memset( &array->data[ array->allocated ], 0, sizeof( array->data[ 0 ] ) * ( new_allocated - array->allocated ));
+		array->allocated = new_allocated;
+	}
+	array->count += 1;
+	return &array->data[ array->count - 1 ];
 }
 
 ======== Using array.h ======*/
 
 struct ast_node* ast_node_array_new( struct ast_node_array* array ){
-        assert( array != NULL, "Malformed argument." );
-        assert( array->count >= 0, "Malformed data." );
-        assert( array->allocated >= 0, "Malformed data." );
-        assert( array->count <= array->allocated, "Malformed data." );
-        if( array->count == array->allocated ){
-                i32 new_allocated = ( array->allocated == 0 ) ? 256 : array->allocated * 2;
-                array->data = realloc( array->data, sizeof( array->data[ 0 ]) * new_allocated );
-                assert( array->data != NULL, "alloc failed." );
-                memset( &array->data[ array->allocated ], 0, sizeof( array->data[ 0 ] ) * ( new_allocated - array->allocated ));
-                array->allocated = new_allocated;
-        }
-        array->count += 1;
-        return &array->data[ array->count - 1 ];
+	assert( array != NULL, "Malformed argument." );
+	assert( array->count >= 0, "Malformed data." );
+	assert( array->allocated >= 0, "Malformed data." );
+	assert( array->count <= array->allocated, "Malformed data." );
+	if( array->count == array->allocated ){
+		i32 new_allocated = ( array->allocated == 0 ) ? 256 : array->allocated * 2;
+		array->data = realloc( array->data, sizeof( array->data[ 0 ]) * new_allocated );
+		assert( array->data != NULL, "alloc failed." );
+		memset( &array->data[ array->allocated ], 0, sizeof( array->data[ 0 ] ) * ( new_allocated - array->allocated ));
+		array->allocated = new_allocated;
+	}
+	array->count += 1;
+	return &array->data[ array->count - 1 ];
 }
 
-struct ast_node** ast_node_array_pointer_new( struct ast_node_pointer_array* array ){
-        assert( array != NULL, "Malformed argument." );
-        assert( array->count >= 0, "Malformed data." );
-        assert( array->allocated >= 0, "Malformed data." );
-        assert( array->count <= array->allocated, "Malformed data." );
-        if( array->count == array->allocated ){
-                i32 new_allocated = ( array->allocated == 0 ) ? 256 : array->allocated * 2;
-                array->data = realloc( array->data, sizeof( array->data[ 0 ]) * new_allocated );
-                assert( array->data != NULL, "alloc failed." );
-                memset( &array->data[ array->allocated ], 0, sizeof( array->data[ 0 ] ) * ( new_allocated - array->allocated ));
-                array->allocated = new_allocated;
-        }
-        array->count += 1;
-        return &array->data[ array->count - 1 ];
+struct ast_node** ast_node_pointer_array_new( struct ast_node_pointer_array* array ){
+	assert( array != NULL, "Malformed argument." );
+	assert( array->count >= 0, "Malformed data." );
+	assert( array->allocated >= 0, "Malformed data." );
+	assert( array->count <= array->allocated, "Malformed data." );
+	if( array->count == array->allocated ){
+		i32 new_allocated = ( array->allocated == 0 ) ? 8 : array->allocated * 2;
+		array->data = realloc( array->data, sizeof( array->data[ 0 ]) * new_allocated );
+		assert( array->data != NULL, "alloc failed." );
+		memset( &array->data[ array->allocated ], 0, sizeof( array->data[ 0 ] ) * ( new_allocated - array->allocated ));
+		array->allocated = new_allocated;
+	}
+	array->count += 1;
+	return &array->data[ array->count - 1 ];
+}
+
+struct ast_node** ast_node_pointer_array_search_derefrence( struct ast_node_pointer_array* array, struct ast_node* value ){
+	assert( array != NULL, "Malformed argument." );
+	assert( array->count >= 0, "Malformed data." );
+	assert( array->allocated >= 0, "Malformed data." );
+	assert( array->count <= array->allocated, "Malformed data." );
+	assert( value != NULL, "Malforemd argument." );
+	assert( value->token.raw != NULL, "Malforemd argument." );
+	assert( value->token.length > 0, "Malforemd argument." );
+	for( i32 i = 0; i < array->count; i++ ){
+		if( array->data[ i ]->token.length != value->token.length ){
+			continue;
+		}
+		for( i32 j = 0; j < value->token.length; j++ ){
+			if( array->data[ i ]->token.raw[ j ] != value->token.raw[ j ] ){
+				goto loop_end;
+			}
+		}
+		return &array->data[ i ];
+loop_end:
+	}
+	return NULL;
 }
 
 #endif
