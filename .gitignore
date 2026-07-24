@@ -10,7 +10,7 @@
 !source/*
 !source/**/*
 !test/
-!test/test.sh
+!test/*
 !test/**/test.sh
 !test/**/test.sl
 !makefile
