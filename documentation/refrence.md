@@ -240,8 +240,8 @@ do_stuff procedure[ i64 : arg i64 ]
 ### Register
 
 Registers are a name for a value.
-`identifier: type = expression;` is the basic form for a register assignment statement.
-A registers value can not be changed once it hase been assigned, unless the assignment code has been rerun.
+`identifier type = expression;` is the basic form for a register assignment statement.
+A registers value can not be changed once it has been assigned.
 
 
 ### Expression
@@ -250,7 +250,7 @@ Expressions are built with any value: literal, register, procedure return.
 Precidence is explicitly defined by wrapping in `()`.
 
 
-## Condition
+### Condition
 
 
 ```ssal
@@ -268,7 +268,7 @@ ret s64 = ? reg > 20 : procc[], procd[];  \{ calls must return the same type }\
 ```
 
 
-## Match
+### Match
 
 ```ssal
 \{
