@@ -81,7 +81,25 @@ enum ast_node_kind {
 	literal_string_node,
 	member_node,
 	addition_node,
-	// not exaustive
+	subtraction_node,
+	multiplication_node,
+	division_node,
+	modulo_node,
+	shift_right_node,
+	shift_left_node,
+	bit_not_node,
+	bit_and_node,
+	bit_or_node,
+	bit_xor_node,
+	logical_not_node,
+	logical_and_node,
+	logical_or_node,
+	equal_node,
+	less_node,
+	greater_node,
+	less_equal_node,
+	greater_equal_node,
+	less_greater_node,
 };
 
 struct raw_token {
@@ -160,6 +178,25 @@ char* node_kind_string( struct ast_node* node ){
 		case literal_string_node: return "literal_string";
 		case member_node:         return "member";
 		case addition_node:       return "addition";
+		case subtraction_node:    return "subtraction";
+		case multiplication_node: return "multiplication";
+		case division_node:       return "division";
+		case modulo_node:         return "modulo";
+		case shift_right_node:    return "shift_right";
+		case shift_left_node:     return "shift_left";
+		case bit_not_node:        return "bit_not";
+		case bit_and_node:        return "bit_and";
+		case bit_or_node:         return "bit_or";
+		case bit_xor_node:        return "bit_xor";
+		case logical_not_node:    return "logical_not";
+		case logical_and_node:    return "logical_and";
+		case logical_or_node:     return "logical_or";
+		case equal_node:          return "equal";
+		case less_node:           return "less";
+		case greater_node:        return "greater";
+		case less_equal_node:     return "less_equal";
+		case greater_equal_node:  return "greater_equal";
+		case less_greater_node:   return "less_greater";
 		default:                  assert( false, "Unknown node kind" );
 	}
 }
@@ -167,7 +204,7 @@ char* node_kind_string( struct ast_node* node ){
 void print_ast_node( struct ast_node* node, i32 depth ){
         assert( node != NULL, "Malformed argument." );
 	char* kind = node_kind_string( node );
-        printf( "%*c%s | %.*s\n", depth, ' ', kind, node->token.length, node->token.raw );
+        printf( "%*c[ %s%s%s ]  %.*s\n", depth, ' ', ansi_foreground_cyan, kind, ansi_reset_graphics, node->token.length, node->token.raw );
         if( node->child != NULL ){
                 print_ast_node( node->child, depth + 1 );
         }
@@ -177,9 +214,9 @@ void print_ast_node( struct ast_node* node, i32 depth ){
 }
 
 void print_ast(){
-	printf( "=== Ast Start ===\n" );
+	printf( "\n=== Ast Start ===\n\n" );
         print_ast_node( &root_node, 1 );
-	printf( "==== Ast End ====\n\n" );
+	printf( "\n==== Ast End ====\n\n" );
 }
 
 void compiler_error( struct raw_token problem, enum compiler_error_level level, char* format, ... ){

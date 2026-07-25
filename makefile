@@ -7,12 +7,6 @@ _start:
 build: _start
 	time clang source/ssal.c -o ssalc -std=c23 -Wall -Wextra -pedantic -Og -ggdb -DDEBUG
 
-release: _start
-	time clang source/ssal.c -o ssalc -std=c23 -Wall -Wextra -pedantic -O3
-
-asan: _start
-	time clang source/ssal.c -o ssalc -std=c23 -Wall -Wextra -pedantic -Og -ggdb -fsanitize=address -DDEBUG
-
 test:
 ifdef t
 	./ssalc test/$(t)/test.sl
