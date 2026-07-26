@@ -113,8 +113,8 @@ struct raw_token {
 };
 
 struct ast_node {
-	struct ast_node* sibling;
-	struct ast_node* child;
+	struct ast_node* sibling; // right-ish
+	struct ast_node* child;   // left-ish
 	struct raw_token token;
 	enum ast_node_kind kind;
 };
@@ -632,79 +632,89 @@ struct raw_token next_token( struct source_file* file ){
 	return token;
 }
 
-enum ast_node_kind parse_expression_token_kind_to_node( struct raw_token token ){
-	switch( token.kind ){
-		case literal_number_token: return literal_number_node;
-		case literal_string_token: return literal_string_node;
-		case identifier_token:     return register_node;
-		case addition_token:       return addition_node;
-		case member_token:         return member_node;
-		case list_separator_token: return list_separator_node;
-		default:                   assert( false, "Expected expression." );
+struct ast_node* parse_expression_leaf( struct source_file* file ){
+	assert( file != NULL, "Malformed arguments." );
+	struct raw_token token = next_token( file );
+	struct ast_node* node = ast_node_array_new( &file->node_raw );
+	node->token = token;
+	if( token.kind == identifier_token ){
+		node->kind = register_node;
+	} else if( token.kind == literal_number_token ){
+		node->kind = literal_number_node;
+	} else if( token.kind == literal_string_token ){
+		node->kind = literal_string_node;
+	} else {
+		compiler_error( token, error_level, "Expected expression leaf." );
 	}
+	return node;
+}
+
+struct ast_node* parse_expression_operator( struct source_file* file, enum raw_token_kind expected_post ){
+	assert( file != NULL, "Malformed arguments." );
+	struct raw_token token = next_token( file );
+	if( token.kind == expected_post ){
+		return NULL;
+	}
+	struct ast_node* node = ast_node_array_new( &file->node_raw );
+	node->token = token;
+	if( token.kind == addition_token ){
+		node->kind = addition_node;
+	} else if( token.kind == member_token ){
+		node->kind = member_node;
+	} else {
+		compiler_error( token, error_level, "Expected expression operator." );
+	}
+	return node;
+}
+
+/*
+
+1 = ,
+2 = || &&
+3 = == < > <= >= <>
+4 = << >> & | ` + - * / %
+n = . @
+
+*/
+
+i8 precidence( struct ast_node* node ){
+	if( node->kind == list_separator_node ){
+		return 1;
+	} else if( node->kind == addition_node ){
+		return 4;
+	} else if( node->kind == member_node ){
+		return 5;
+	}
+	compiler_error( node->token, error_level, "Expected expression precidence operator." );
 	return 0;
 }
 
-bool token_is_expression_leaf( struct raw_token token ){
-	return token.kind == identifier_token ||
-	       token.kind == literal_number_token ||
-	       token.kind == literal_string_token;
-}
-
-bool token_is_binary_operator( struct raw_token token ){
-	return token.kind == addition_token ||
-	       token.kind == member_token ||
-	       token.kind == list_separator_token;
-}
-
 struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind expected_post ){
-	assert( file != NULL, "Malformed argument." );
-	struct raw_token token = next_token( file );
-	compiler_assert( token_is_expression_leaf( token ), token, error_level, "Expected register or literal at the start of an expression." );
-	struct ast_node* left = ast_node_array_new( &file->node_raw );
-	struct ast_node* operator = { 0 };
-	struct ast_node* right = { 0 };
-	left->token = token;
-	left->kind = parse_expression_token_kind_to_node( token );
-	token = next_token( file );
-	if( !token_is_binary_operator( token )){
-		if( token.kind == argument_open_token ){
-			operator = left;
-			operator->sibling = parse_expression( file, argument_close_token );
-			operator->kind = procedure_call_node;
-			token = next_token( file );
-			if( token.kind == expected_post ){
-				return operator;
-			}
-			compiler_error( token, error_level, "Expected expression binary operator or end." );
-		}
-		if( token.kind == expected_post ){
-			return left;
-		}
-		compiler_error( token, error_level, "Expected expression binary operator." );
+	assert( file != NULL, "Malformed arguments." );
+	struct ast_node* root = { 0 };
+	struct ast_node* operand = parse_expression_leaf( file );
+	struct ast_node* operator = parse_expression_operator( file, expected_post );
+	if( operator == NULL ){
+		return operand;
 	}
+	root = operator;
+	operator->child = operand;
 	while( 1 ){
-		operator = ast_node_array_new( &file->node_raw );
-		operator->token = token;
-		operator->kind = parse_expression_token_kind_to_node( token );
-		token = next_token( file );
-		compiler_assert( token_is_expression_leaf( token ), token, error_level, "Expected expression leaf." );
-		right = ast_node_array_new( &file->node_raw );
-		right->token = token;
-		right->kind = parse_expression_token_kind_to_node( token );
-		operator->sibling = left;
-		operator->child = right;
-		token = next_token( file );
-		if( !token_is_binary_operator( token )){
-			if( token.kind == expected_post ){
-				return operator;
-			}
-			compiler_error( token, error_level, "Expected expression binary operator or end." );
+		operand = parse_expression_leaf( file );
+		struct ast_node* new_operator = parse_expression_operator( file, expected_post );
+		if( new_operator == NULL ){
+			operator->sibling = operand;
+			break;
 		}
-		left = operator;
-		operator = NULL;
-		right = NULL;
+		if( precidence( new_operator ) >= precidence( operator )){
+			new_operator->child = operand;
+			operator->sibling = new_operator;
+			operator = new_operator;
+		} else {
+			unreachable
+		}
 	}
+	return root;
 }
 
 void parse_jump( struct source_file* file, struct ast_node* root ){
@@ -923,17 +933,18 @@ void validate_expression( struct ast_node* expression, struct ast_node* type, st
 	assert( type->kind == type_node, "Malformed argument." );
 	assert( available_register != NULL, "Malformed argument." );
 	if( expression->kind == member_node ){
-		struct ast_node** result = ast_node_pointer_array_search_derefrence( available_register, expression->sibling );
+		struct ast_node** result = ast_node_pointer_array_search_derefrence( available_register, expression->child );
 		compiler_assert( result != NULL, expression->sibling->token, error_level, "Register not declared." );
 		compiler_assert( char_array_equal( (*result)->child->token.raw, "@", 1 ), expression->token, error_level, "Register value is diffrent type." );
 		compiler_assert( char_array_equal( (*result)->child->child->token.raw, "@", 1 ), expression->token, error_level, "Register value is diffrent type." );
 		compiler_assert( char_array_equal( (*result)->child->child->child->token.raw, "i8", 2 ), expression->token, error_level, "Register value is diffrent type." );
-		if( char_array_equal( expression->child->token.raw, "data", 4 )){
-			assert( 0, "Unreachable" );
-		} else if( char_array_equal( expression->child->token.raw, "count", 5 )){
-			compiler_assert( char_array_equal( type->token.raw, "i64", 3 ), expression->child->token, error_level, "Register value is different type." );
+		if( char_array_equal( expression->sibling->token.raw, "data", 4 )){
+			unreachable
+		} else if( char_array_equal( expression->sibling->token.raw, "count", 5 )){
+			compiler_assert( char_array_equal( type->token.raw, "i64", 3 ), expression->sibling->token, error_level, "Register value is different type." );
 		} else {
-			compiler_error( expression->child->token, error_level, "Register value is different type." );
+			compiler_error( expression->sibling->token, error_level, 
+			                "Register value is different not an array memeber '%.*s'.", expression->sibling->token.length, expression->sibling->token.raw );
 		}
 		return;
 	}
@@ -1208,8 +1219,8 @@ void output_jump( struct ast_node* root, struct ast_node* procedure ){
 		string_append( &output.file, root->token.raw, root->token.length );
 		string_append( &output.file, ".1", 2 );
 	} else if( root->child->kind == member_node ){
-		assert( char_array_equal( root->child->sibling->token.raw, "argument", 8 ), "Only supporting argument.count member." );
-		assert( char_array_equal( root->child->child->token.raw, "count", 5 ), "Only supporting argument.count member." );
+		assert( char_array_equal( root->child->child->token.raw, "argument", 8 ), "Only supporting argument.count member." );
+		assert( char_array_equal( root->child->sibling->token.raw, "count", 5 ), "Only supporting argument.count member." );
 		string_append( &output.file, "\tret ", 5 );
 		string_append( &output.file, procedure->child->child->token.raw, procedure->child->child->token.length );
 		string_append( &output.file, " %argument.count", 16 );
