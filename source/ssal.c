@@ -657,10 +657,14 @@ struct ast_node* parse_expression_operator( struct source_file* file, enum raw_t
 	}
 	struct ast_node* node = ast_node_array_new( &file->node_raw );
 	node->token = token;
-	if( token.kind == addition_token ){
+	if( token.kind == list_separator_token ){
+		node->kind = list_separator_node;
+	} else if( token.kind == addition_token ){
 		node->kind = addition_node;
 	} else if( token.kind == member_token ){
 		node->kind = member_node;
+	} else if( token.kind == argument_open_token ){
+		node->kind = procedure_call_node;
 	} else {
 		compiler_error( token, error_level, "Expected expression operator." );
 	}
@@ -668,16 +672,17 @@ struct ast_node* parse_expression_operator( struct source_file* file, enum raw_t
 }
 
 /*
-
-1 = ,
-2 = || &&
-3 = == < > <= >= <>
-4 = << >> & | ` + - * / %
-n = . @
-
+	1 = ,
+	2 = || &&
+	3 = == < > <= >= <>
+	4 = << >> & | ` + - * / %
+	5 = . @
 */
 
 i8 precidence( struct ast_node* node ){
+	if( node == NULL ){
+		return 0;
+	}
 	if( node->kind == list_separator_node ){
 		return 1;
 	} else if( node->kind == addition_node ){
@@ -691,12 +696,21 @@ i8 precidence( struct ast_node* node ){
 
 struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind expected_post ){
 	assert( file != NULL, "Malformed arguments." );
-	struct ast_node* root = { 0 };
 	struct ast_node* operand = parse_expression_leaf( file );
 	struct ast_node* operator = parse_expression_operator( file, expected_post );
 	if( operator == NULL ){
 		return operand;
 	}
+	if( operator->kind == procedure_call_node ){
+		operand->kind = procedure_call_node;
+		operator = parse_expression( file, argument_close_token );
+		operand->sibling = operator;
+		operator = parse_expression_operator( file, expected_post );
+		if( operator == NULL ){
+			return operand;
+		}
+	}
+	struct ast_node* root = { 0 };
 	root = operator;
 	operator->child = operand;
 	while( 1 ){
@@ -705,6 +719,16 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 		if( new_operator == NULL ){
 			operator->sibling = operand;
 			break;
+		}
+		if( new_operator->kind == procedure_call_node ){
+			operand->kind = procedure_call_node;
+			new_operator = parse_expression( file, argument_close_token );
+			operand->sibling = new_operator;
+			new_operator = parse_expression_operator( file, expected_post );
+			if( new_operator == NULL ){
+				operator->sibling = operand;
+				break;
+			}
 		}
 		if( precidence( new_operator ) >= precidence( operator )){
 			new_operator->child = operand;
@@ -1000,13 +1024,13 @@ void validate_routine( struct ast_node* routine, struct ast_node* return_type, s
 			} else if( value->kind == procedure_call_node ){
 				compiler_assert( char_array_equal( value->token.raw, "write_syscall", 13 ), value->token, error_level, "Procedure not defined." );
 				compiler_assert( value->sibling->kind == list_separator_node, value->token, error_level, "Procedure signature does not match." );
-				if( value->sibling->sibling->kind == literal_number_node ){
-					// overflow warning
-				} else if( value->sibling->sibling->kind == register_node ){
+				if( value->sibling->child->kind == literal_number_node ){
+				} else if( value->sibling->child->kind == register_node ){
 					validate_register_type( register_type, value->sibling->sibling, &available_register );
 				} else {
 					compiler_error( value->token, error_level, "Procedure signature does not match." );
 				}
+				compiler_assert( value->sibling->sibling->kind == literal_string_node, value->sibling->sibling->token, error_level, "Needs string." );
 			} else if( value->kind == register_node ){
 				validate_register_type( register_type, value, &available_register );
 			} else if( value->kind == literal_number_node ){
@@ -1120,15 +1144,15 @@ void output_procedure_call( struct ast_node* root ){
 	string_append( &output.file, "call ", 5 );
 	if( char_array_equal( root->token.raw, "write_syscall", 13 )){
 		string_append( &output.file, "i64 @write_syscall( i64 ", 24 );
-		string_append( &output.file, root->sibling->sibling->token.raw, root->sibling->sibling->token.length );
+		string_append( &output.file, root->sibling->child->token.raw, root->sibling->child->token.length );
 		string_append( &output.file, ", ptr @.literal_string.", 23 );
-		i32 index = output_add_string( root->sibling->child );
+		i32 index = output_add_string( root->sibling->sibling );
 		string_alloc( &output.file, 32 );
 		i32 string_added = sprintf( &output.file.data[ output.file.length ], "%d", index );
 		output.file.length += string_added;
 		string_append( &output.file, ", i64 ", 6 );
 		string_alloc( &output.file, 32 );
-		string_added = sprintf( &output.file.data[ output.file.length ], "%d", root->sibling->child->token.length - 2 );
+		string_added = sprintf( &output.file.data[ output.file.length ], "%d", root->sibling->sibling->token.length - 2 );
 		output.file.length += string_added;
 		string_append( &output.file, " )", 2 );
 	} else {
