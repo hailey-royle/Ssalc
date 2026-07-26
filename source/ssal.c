@@ -714,7 +714,6 @@ void parse_jump( struct source_file* file, struct ast_node* root ){
 	assert( root->kind == jump_node, "Malformed argument data." );
 	struct raw_token token = next_token( file );
 	compiler_assert( token.kind == identifier_token, token, error_level, "Can only jump to return." );
-	compiler_assert( char_array_equal( token.raw, "return", 6 ), token, error_level, "Can only jump to return." );
 	root->token = token;
 	root->kind = jump_node;
 	token = next_token( file );
@@ -737,6 +736,31 @@ void parse_register( struct source_file* file, struct ast_node* root ){
 	token = next_token( file );
 	compiler_assert( token.kind == assignment_token, token, error_level, "register must be assigned a value." );
 	root->child->sibling = parse_expression( file, statement_end_token );
+}
+
+void parse_routine( struct source_file* file, struct ast_node* root ){
+	assert( file != NULL, "Malformed argument." );
+	assert( root != NULL, "Malformed argument." );
+	assert( root->child == NULL, "Malformed argument data." );
+	assert( root->kind == routine_node, "Malformed argument data." );
+	struct raw_token token = next_token( file );
+	compiler_assert( token.kind == routine_token, token, error_level, "Expected routine." );
+	token = next_token( file );
+	compiler_assert( token.kind == argument_open_token, token, error_level, "Routine arguments must start with '['." );
+	token = next_token( file );
+	compiler_assert( token.kind == identifier_token, token, error_level, "Invalid routine argument." );
+	root->child = ast_node_array_new( &file->node_raw );
+	root->child->token = token;
+	root->child->kind = argument_node;
+	token = next_token( file );
+	compiler_assert( token.kind == identifier_token, token, error_level, "Invalid routine argument." );
+	root->child = ast_node_array_new( &file->node_raw );
+	root->child->token = token;
+	root->child->kind = type_node;
+	token = next_token( file );
+	compiler_assert( token.kind == argument_close_token, token, error_level, "Routine arguments must end with ']'." );
+	token = next_token( file );
+	compiler_assert( token.kind == statement_end_token, token, error_level, "Routine must end in a ';'." );
 }
 
 void parse_procedure( struct source_file* file, struct ast_node* root ){
@@ -792,24 +816,37 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 	}
 	token = next_token( file );
 	compiler_assert( token.kind == scope_open_token, token, error_level, "Expected '{' following procedue arguments." );
+	statement->sibling = ast_node_array_new( &file->node_raw );
+	statement = statement->sibling;
 	while( 1 ){
 		token = next_token( file );
 		if( token.kind == identifier_token ){
-			statement->sibling = ast_node_array_new( &file->node_raw );
-			statement = statement->sibling;
 			statement->token = token;
 			statement->kind = register_node;
 			parse_register( file, statement );
 		} else if( token.kind == jump_token ){
-			statement->sibling = ast_node_array_new( &file->node_raw );
-			statement = statement->sibling;
 			statement->kind = jump_node;
 			parse_jump( file, statement );
-		} else if( token.kind == scope_close_token ){
-			break;
+			token = next_token( file );
+			if( token.kind == identifier_token ){
+				routine->sibling = ast_node_array_new( &file->node_raw );
+				routine = routine->sibling;
+				routine->token = token;
+				routine->kind = routine_node;
+				parse_routine( file, routine );
+				routine->child = ast_node_array_new( &file->node_raw );
+				statement = routine->child;
+				continue;
+			} else if( token.kind == scope_close_token ){
+				break;
+			} else {
+				compiler_error( token, error_level, "Expected procedure close or routine." );
+			}
 		} else {
 			compiler_error( token, error_level, "Expected jump or register." );
 		}
+		statement->sibling = ast_node_array_new( &file->node_raw );
+		statement = statement->sibling;
 	}
 }
 
@@ -947,12 +984,11 @@ void validate_routine( struct ast_node* routine, struct ast_node* return_type, s
 			struct ast_node* register_type = statement->child;
 			compiler_assert( register_type->kind == type_node, register_type->token, error_level, "Register must have type." );
 			struct ast_node* value = statement->child->sibling;
-			if( node_is_operator( value )){
+			if( value->kind == binary_operator_node ){
 				validate_expression( value, register_type, &available_register );
 			} else if( value->kind == procedure_call_node ){
 				compiler_assert( char_array_equal( value->token.raw, "write_syscall", 13 ), value->token, error_level, "Procedure not defined." );
 				compiler_assert( value->sibling->kind == list_separator_node, value->token, error_level, "Procedure signature does not match." );
-				compiler_assert( value->sibling->child->kind == literal_string_node, value->token, error_level, "Procedure signature does not match." );
 				if( value->sibling->sibling->kind == literal_number_node ){
 					// overflow warning
 				} else if( value->sibling->sibling->kind == register_node ){
