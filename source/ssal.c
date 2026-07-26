@@ -984,7 +984,7 @@ void validate_routine( struct ast_node* routine, struct ast_node* return_type, s
 			struct ast_node* register_type = statement->child;
 			compiler_assert( register_type->kind == type_node, register_type->token, error_level, "Register must have type." );
 			struct ast_node* value = statement->child->sibling;
-			if( value->kind == binary_operator_node ){
+			if( node_is_operator( value )){
 				validate_expression( value, register_type, &available_register );
 			} else if( value->kind == procedure_call_node ){
 				compiler_assert( char_array_equal( value->token.raw, "write_syscall", 13 ), value->token, error_level, "Procedure not defined." );
