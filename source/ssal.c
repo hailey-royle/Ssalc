@@ -80,6 +80,7 @@ enum ast_node_kind {
 	literal_number_node,
 	literal_string_node,
 	member_node,
+	array_node,
 	addition_node,
 	subtraction_node,
 	multiplication_node,
@@ -176,6 +177,7 @@ char* node_kind_string( struct ast_node* node ){
 		case list_separator_node: return "list_separator";
 		case literal_number_node: return "literal_number";
 		case literal_string_node: return "literal_string";
+		case array_node:          return "array";
 		case member_node:         return "member";
 		case addition_node:       return "addition";
 		case subtraction_node:    return "subtraction";
@@ -663,6 +665,8 @@ struct ast_node* parse_expression_operator( struct source_file* file, enum raw_t
 		node->kind = addition_node;
 	} else if( token.kind == member_token ){
 		node->kind = member_node;
+	} else if( token.kind == array_token ){
+		node->kind = array_node;
 	} else if( token.kind == argument_open_token ){
 		node->kind = procedure_call_node;
 	} else {
@@ -688,6 +692,8 @@ i8 precidence( struct ast_node* node ){
 	} else if( node->kind == addition_node ){
 		return 4;
 	} else if( node->kind == member_node ){
+		return 5;
+	} else if( node->kind == array_node ){
 		return 5;
 	}
 	compiler_error( node->token, error_level, "Expected expression precidence operator." );
@@ -1030,7 +1036,11 @@ void validate_routine( struct ast_node* routine, struct ast_node* return_type, s
 				} else {
 					compiler_error( value->token, error_level, "Procedure signature does not match." );
 				}
-				compiler_assert( value->sibling->sibling->kind == literal_string_node, value->sibling->sibling->token, error_level, "Needs string." );
+				if( value->sibling->sibling->kind == literal_string_node ){
+				} else if( value->sibling->sibling->kind == array_node ){
+				} else {
+					compiler_error( value->sibling->sibling->token, error_level, "Needs string." );
+				}
 			} else if( value->kind == register_node ){
 				validate_register_type( register_type, value, &available_register );
 			} else if( value->kind == literal_number_node ){
@@ -1138,22 +1148,39 @@ i32 output_add_string( struct ast_node* root ){
 	return output.literal_string_number - 1;
 }
 
-void output_procedure_call( struct ast_node* root ){
+void output_procedure_call( struct ast_node* root, i32 statement_index ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->kind == procedure_call_node, "Malformed argument." );
 	string_append( &output.file, "call ", 5 );
 	if( char_array_equal( root->token.raw, "write_syscall", 13 )){
 		string_append( &output.file, "i64 @write_syscall( i64 ", 24 );
 		string_append( &output.file, root->sibling->child->token.raw, root->sibling->child->token.length );
-		string_append( &output.file, ", ptr @.literal_string.", 23 );
-		i32 index = output_add_string( root->sibling->sibling );
-		string_alloc( &output.file, 32 );
-		i32 string_added = sprintf( &output.file.data[ output.file.length ], "%d", index );
-		output.file.length += string_added;
-		string_append( &output.file, ", i64 ", 6 );
-		string_alloc( &output.file, 32 );
-		string_added = sprintf( &output.file.data[ output.file.length ], "%d", root->sibling->sibling->token.length - 2 );
-		output.file.length += string_added;
+		string_append( &output.file, ", ptr ", 6 );
+		struct ast_node* string = root->sibling->sibling;
+		if( string->kind == literal_string_node ){
+			string_append( &output.file, "@.literal_string.", 17 );
+			i32 index = output_add_string( string );
+			string_alloc( &output.file, 32 );
+			i32 string_added = sprintf( &output.file.data[ output.file.length ], "%d", index );
+			output.file.length += string_added;
+			string_append( &output.file, ", i64 ", 6 );
+			string_alloc( &output.file, 32 );
+			string_added = sprintf( &output.file.data[ output.file.length ], "%d", string->token.length - 2 );
+			output.file.length += string_added;
+		} else if( string->kind == array_node ){
+			assert( char_array_equal( string->child->token.raw, "argument", 8 ), "Bad string" );
+			string_insert( &output.file, statement_index, "\t%argument.data.", 16 );
+			statement_index += 16;
+			string_insert( &output.file, statement_index, string->sibling->token.raw, string->sibling->token.length );
+			statement_index += string->sibling->token.length;
+			string_insert( &output.file, statement_index, ".data.p = getelementptr i8, ptr %argument.data, i64 ", 52 );
+			statement_index += 52;
+			string_insert( &output.file, statement_index, string->sibling->token.raw, string->sibling->token.length );
+			statement_index += string->sibling->token.length;
+			string_insert( &output.file, statement_index, "\n", 1 );
+		} else {
+			unreachable
+		}
 		string_append( &output.file, " )", 2 );
 	} else {
 		assert( false, "Not supporting arbitrary procedure calls yet." );
@@ -1163,6 +1190,7 @@ void output_procedure_call( struct ast_node* root ){
 void output_register( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->kind == register_node, "Malformed argument." );
+	i32 statement_index = output.file.length;
 	string_append( &output.file, "\t%", 2 );
 	string_append( &output.file, root->token.raw, root->token.length );
 	string_append( &output.file, " = ", 3 );
@@ -1201,7 +1229,7 @@ void output_register( struct ast_node* root ){
 			assert( false, "Bad addition root not valid for now." );
 		}
 	} else if ( value->kind == procedure_call_node ){
-		output_procedure_call( value );
+		output_procedure_call( value, statement_index );
 	} else {
 		assert( false, "Bad root not valid for now." );
 	}

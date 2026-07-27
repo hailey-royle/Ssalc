@@ -94,4 +94,25 @@ void string_append( struct string* source, char* src, i32 count ){
 	return;
 }
 
+void string_insert( struct string* source, i32 index, char* src, i32 count ){
+	assert( source != NULL, "Malformed args" );
+	assert( src != NULL, "Malformed args" );
+	assert( count >= 0, "Malformed args" );
+	assert( source->length >= index, "Malformed args." );
+	assert( source->allocated > source->length || source->length <= 0, "Malformed internal source data" );
+	if( count == 0 ) return;
+	if( source->length + count >= source->allocated ){
+		i32 allocated = ( source->allocated + count ) * 2;
+		char* tmp = realloc( source->data, allocated );
+		assert( tmp != NULL, "Alloc failed" );
+		source->data = tmp;
+		source->allocated = allocated;
+	}
+	memmove( &source->data[ index + count ], &source->data[ index ], source->length - index );
+	memmove( &source->data[ index ], src, count );
+	source->length += count;
+	source->data[ source->length ] = '\0';
+	return;
+}
+
 #endif
