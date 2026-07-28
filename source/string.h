@@ -1,15 +1,9 @@
 #ifndef STRINGH
 #define STRINGH
 
-struct string {
-	char* data;
-	i32 allocated;
-	i32 length;
-};
-
 bool string_from_file( struct string* source, char* filename ){
 	assert( source != NULL, "Malformed args" );
-	assert( source->allocated == 0 && source->length == 0 && source->data == NULL, "String must be empty" );
+	assert( source->allocated == 0 && source->count == 0 && source->data == NULL, "String must be empty" );
 	assert( filename != NULL, "Malformed args" );
 	FILE* file = fopen( filename, "r" );
 	if( file == NULL ){
@@ -20,33 +14,33 @@ bool string_from_file( struct string* source, char* filename ){
 	if( error != 0 ){
 		return true;
 	};
-	i32 file_length = ftell( file );
+	i32 file_count = ftell( file );
 	rewind( file );
-	source->data = malloc( file_length + 1 );
+	source->data = malloc( file_count + 1 );
 	if( source->data == NULL ){
 		return true;
 	};
-	i64 bytes_read = (i64) fread( source->data, 1, file_length, file );
-	if( file_length != bytes_read ){
+	i64 bytes_read = (i64) fread( source->data, 1, file_count, file );
+	if( file_count != bytes_read ){
 		return true;
 	};
 	fclose( file );
-	source->allocated = file_length + 1;
-	source->length = file_length;
-	source->data[ source->length ] = '\0';
+	source->allocated = file_count + 1;
+	source->count = file_count;
+	source->data[ source->count ] = '\0';
 	return false;
 }
 
 bool string_to_file( struct string* source, char* filename ){
 	assert( source != NULL, "Malformed args" );
-	assert( source->allocated > source->length || source->length <= 0, "Malformed internal source data" );
+	assert( source->allocated > source->count || source->count <= 0, "Malformed internal source data" );
 	assert( filename != NULL, "Malformed args" );
 	FILE* file = fopen( filename, "w" );
 	if( file == NULL ){
 		return true;
 	}
-	i64 bytes_wrote = (i64) fwrite( source->data, 1, source->length, file );
-	if( source->length != bytes_wrote ){
+	i64 bytes_wrote = (i64) fwrite( source->data, 1, source->count, file );
+	if( source->count != bytes_wrote ){
 		return true;
 	}
 	fclose( file );
@@ -60,13 +54,13 @@ void string_free( struct string* source ){
 		source->data = NULL;
 	}
 	source->allocated = 0;
-	source->length = 0;
+	source->count = 0;
 }
 
 void string_alloc( struct string* source, i32 count ){
 	assert( source != NULL, "Malformed args" );
 	assert( count >= 0, "Malformed args" );
-	if( source->length + count >= source->allocated ){
+	if( source->count + count >= source->allocated ){
 		i32 allocated = ( source->allocated + count ) * 2;
 		char* tmp = realloc( source->data, allocated );
 		assert( tmp != NULL, "Alloc failed" );
@@ -79,18 +73,18 @@ void string_append( struct string* source, char* src, i32 count ){
 	assert( source != NULL, "Malformed args" );
 	assert( src != NULL, "Malformed args" );
 	assert( count >= 0, "Malformed args" );
-	assert( source->allocated > source->length || source->length <= 0, "Malformed internal source data" );
+	assert( source->allocated > source->count || source->count <= 0, "Malformed internal source data" );
 	if( count == 0 ) return;
-	if( source->length + count >= source->allocated ){
+	if( source->count + count >= source->allocated ){
 		i32 allocated = ( source->allocated + count ) * 2;
 		char* tmp = realloc( source->data, allocated );
 		assert( tmp != NULL, "Alloc failed" );
 		source->data = tmp;
 		source->allocated = allocated;
 	}
-	memmove( &source->data[ source->length ], src, count );
-	source->length += count;
-	source->data[ source->length ] = '\0';
+	memmove( &source->data[ source->count ], src, count );
+	source->count += count;
+	source->data[ source->count ] = '\0';
 	return;
 }
 
@@ -98,20 +92,20 @@ void string_insert( struct string* source, i32 index, char* src, i32 count ){
 	assert( source != NULL, "Malformed args" );
 	assert( src != NULL, "Malformed args" );
 	assert( count >= 0, "Malformed args" );
-	assert( source->length >= index, "Malformed args." );
-	assert( source->allocated > source->length || source->length <= 0, "Malformed internal source data" );
+	assert( source->count >= index, "Malformed args." );
+	assert( source->allocated > source->count || source->count <= 0, "Malformed internal source data" );
 	if( count == 0 ) return;
-	if( source->length + count >= source->allocated ){
+	if( source->count + count >= source->allocated ){
 		i32 allocated = ( source->allocated + count ) * 2;
 		char* tmp = realloc( source->data, allocated );
 		assert( tmp != NULL, "Alloc failed" );
 		source->data = tmp;
 		source->allocated = allocated;
 	}
-	memmove( &source->data[ index + count ], &source->data[ index ], source->length - index );
+	memmove( &source->data[ index + count ], &source->data[ index ], source->count - index );
 	memmove( &source->data[ index ], src, count );
-	source->length += count;
-	source->data[ source->length ] = '\0';
+	source->count += count;
+	source->data[ source->count ] = '\0';
 	return;
 }
 

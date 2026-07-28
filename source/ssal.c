@@ -10,8 +10,15 @@
 #define i8 int8_t
 
 #include "assert.h"
-#include "string.h"
 #include "tui.h"
+
+struct string {
+	char* data;
+	i32 count;
+	i32 allocated;
+};
+
+#include "string.h"
 
 enum raw_token_kind {
 	error_token,
@@ -304,7 +311,7 @@ struct raw_token next_token( struct source_file* file ){
 	assert( file->root != NULL, "Malformed argument data." );
 	assert( file->source.data != NULL, "Malformed argument data." );
 	assert( file->index >= 0, "Malformed argument data." );
-	assert( file->source.length > file->index, "Malformed argument data." );
+	assert( file->source.count > file->index, "Malformed argument data." );
 	assert( file->name != NULL, "Malformed argument data." );
 	assert( file->name_length > 0, "Malformed argument data." );
 	struct raw_token token = { 0 };
@@ -319,7 +326,7 @@ struct raw_token next_token( struct source_file* file ){
 		}
 		file->index += 1;
 	}
-	if( file->index >= file->source.length ){
+	if( file->index >= file->source.count ){
 		return token;
 	}
 	if(( '\\' == file->source.data[ file->index ]) && ( '{' == file->source.data[ file->index + 1 ])){
@@ -369,7 +376,7 @@ struct raw_token next_token( struct source_file* file ){
 		}
 		file->index += 1;
 	}
-	if( file->index >= file->source.length ){
+	if( file->index >= file->source.count ){
 		return token;
 	}
 	token.raw = &file->source.data[ file->index ];
@@ -926,7 +933,7 @@ void parse_file( struct ast_node* root ){
 			compiler_error( token, error_level, "Expected global declaration." );
 		}
 		token = next_token( &file );
-		if( file.index >= file.source.length ){
+		if( file.index >= file.source.count ){
 			break;
 		}
 		compiler_error( token, error_level, "Compiler only supports start procedure in global scope." );
@@ -1136,12 +1143,12 @@ i32 output_add_string( struct ast_node* root ){
 	assert( root->kind == literal_string_node, "Malformed argument." );
 	string_append( &output.literal_string, "@.literal_string.", 17 );
 	string_alloc( &output.literal_string, 32 );
-	i32 string_added = sprintf( &output.literal_string.data[ output.literal_string.length ], "%d", output.literal_string_number );
-	output.literal_string.length += string_added;
+	i32 string_added = sprintf( &output.literal_string.data[ output.literal_string.count ], "%d", output.literal_string_number );
+	output.literal_string.count += string_added;
 	string_append( &output.literal_string, " = global [ ", 12 );
 	string_alloc( &output.literal_string, 32 );
-	string_added = sprintf( &output.literal_string.data[ output.literal_string.length ], "%d", root->token.length - 2 );
-	output.literal_string.length += string_added;
+	string_added = sprintf( &output.literal_string.data[ output.literal_string.count ], "%d", root->token.length - 2 );
+	output.literal_string.count += string_added;
 	string_append( &output.literal_string, " x i8 ] c", 9 );
 	string_append( &output.literal_string, root->token.raw, root->token.length );
 	output.literal_string_number += 1;
@@ -1161,12 +1168,12 @@ void output_procedure_call( struct ast_node* root, i32 statement_index ){
 			string_append( &output.file, "@.literal_string.", 17 );
 			i32 index = output_add_string( string );
 			string_alloc( &output.file, 32 );
-			i32 string_added = sprintf( &output.file.data[ output.file.length ], "%d", index );
-			output.file.length += string_added;
+			i32 string_added = sprintf( &output.file.data[ output.file.count ], "%d", index );
+			output.file.count += string_added;
 			string_append( &output.file, ", i64 ", 6 );
 			string_alloc( &output.file, 32 );
-			string_added = sprintf( &output.file.data[ output.file.length ], "%d", string->token.length - 2 );
-			output.file.length += string_added;
+			string_added = sprintf( &output.file.data[ output.file.count ], "%d", string->token.length - 2 );
+			output.file.count += string_added;
 		} else if( string->kind == array_node ){
 			assert( char_array_equal( string->child->token.raw, "argument", 8 ), "Bad string" );
 			string_insert( &output.file, statement_index, "\t%argument.data.", 16 );
@@ -1190,7 +1197,7 @@ void output_procedure_call( struct ast_node* root, i32 statement_index ){
 void output_register( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->kind == register_node, "Malformed argument." );
-	i32 statement_index = output.file.length;
+	i32 statement_index = output.file.count;
 	string_append( &output.file, "\t%", 2 );
 	string_append( &output.file, root->token.raw, root->token.length );
 	string_append( &output.file, " = ", 3 );
@@ -1332,8 +1339,8 @@ void output_llvm( struct ast_node* root ){
 	string_append( &output.file, llvmir_start, sizeof( llvmir_start ) - 1 );
 	output_procedure( root->child );
 	string_append( &output.file, "\n", 1 );
-	if( output.literal_string.length > 0 ){
-		string_append( &output.file, output.literal_string.data, output.literal_string.length );
+	if( output.literal_string.count > 0 ){
+		string_append( &output.file, output.literal_string.data, output.literal_string.count );
 		string_append( &output.file, "\n", 1 );
 	}
 	root->token.raw[ root->token.length - 2 ] = 'l';
