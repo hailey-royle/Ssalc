@@ -256,6 +256,7 @@ Precidence is explicitly defined by wrapping in `()`.
 ```ssal
 \{
 basic contidional format:
+
 ? expression : if_true, if_false
 }\
 
@@ -268,15 +269,16 @@ ret s64 = ? reg > 20 : procc[], procd[];  \{ calls must return the same type }\
 ```
 
 
-### Match
+### Selection
 
 ```ssal
 \{
-basic match format:
+basic selection format:
+
 $ expression : default,
-	a -> a_handle,
-	b -> b_handle,
-	c -> c_handle;
+	a : a_handle,
+	b : b_handle,
+	c : c_handle;
 }\
 
 \{ has the same usage rules as a condition }\
