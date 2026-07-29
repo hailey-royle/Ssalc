@@ -213,7 +213,7 @@ char* node_kind_string( struct ast_node* node ){
 void print_ast_node( struct ast_node* node, i32 depth ){
         assert( node != NULL, "Malformed argument." );
 	char* kind = node_kind_string( node );
-        printf( "%*c[ %s%s%s ]  %.*s\n", depth, ' ', ansi_foreground_cyan, kind, ansi_reset_graphics, node->token.length, node->token.raw );
+        printf( "%*c%s%s%s  [ %.*s ]\n", depth * 2, ' ', ansi_foreground_cyan, kind, ansi_reset_graphics, node->token.length, node->token.raw );
         if( node->child != NULL ){
                 print_ast_node( node->child, depth + 1 );
         }
