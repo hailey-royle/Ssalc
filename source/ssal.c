@@ -42,7 +42,7 @@ enum raw_token_kind {
 	result_token,
 	jump_token,
 	assignment_token,
-	interpreter_token,
+	interpreter_mark_token,
 	pointer_token,
 	array_token,
 	conditional_token,
@@ -88,6 +88,7 @@ enum ast_node_kind {
 	literal_string_node,
 	member_node,
 	array_node,
+	pointer_node,
 	addition_node,
 	subtraction_node,
 	multiplication_node,
@@ -185,6 +186,7 @@ char* node_kind_string( struct ast_node* node ){
 		case literal_number_node: return "literal_number";
 		case literal_string_node: return "literal_string";
 		case array_node:          return "array";
+		case pointer_node:        return "pointer";
 		case member_node:         return "member";
 		case addition_node:       return "addition";
 		case subtraction_node:    return "subtraction";
@@ -508,7 +510,7 @@ struct raw_token next_token( struct source_file* file ){
 		file->column += 1;
 		file->index += 1;
 		token.length += 1;
-		token.kind = interpreter_token;
+		token.kind = interpreter_mark_token;
 	} else if( '^' == file->source.data[ file->index ]){
 		file->column += 1;
 		file->index += 1;
@@ -754,18 +756,18 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 	return root;
 }
 
-void parse_jump( struct source_file* file, struct ast_node* root ){
+void parse_jump( struct source_file* file, struct ast_node* node ){
 	assert( file != NULL, "Malformed argument." );
-	assert( root != NULL, "Malformed argument." );
-	assert( root->child == NULL, "Malformed argument data." );
-	assert( root->kind == jump_node, "Malformed argument data." );
+	assert( node != NULL, "Malformed argument." );
+	assert( node->child == NULL, "Malformed argument data." );
+	assert( node->kind == jump_node, "Malformed argument data." );
 	struct raw_token token = next_token( file );
-	compiler_assert( token.kind == identifier_token, token, error_level, "Can only jump to return." );
-	root->token = token;
-	root->kind = jump_node;
+	compiler_assert( token.kind == identifier_token, token, error_level, "Expected jump location." );
+	node->token = token;
+	node->kind = jump_node;
 	token = next_token( file );
 	compiler_assert( token.kind == argument_open_token, token, error_level, "Expected '[' after jump location." );
-	root->child = parse_expression( file, argument_close_token );
+	node->child = parse_expression( file, argument_close_token );
 	token = next_token( file );
 	compiler_assert( token.kind == statement_end_token, token, error_level, "';' required at the end of every statement." );
 }
@@ -773,41 +775,79 @@ void parse_jump( struct source_file* file, struct ast_node* root ){
 void parse_register( struct source_file* file, struct ast_node* root ){
 	assert( file != NULL, "Malformed argument." );
 	assert( root != NULL, "Malformed argument." );
-	assert( root->child == NULL, "Malformed argument data." );
 	assert( root->kind == register_node, "Malformed argument data." );
+	assert( root->child != NULL, "Malformed argument data." );
+	assert( root->child->kind == type_node, "Malformed argument data." );
+	assert( root->child->sibling == NULL, "Malformed argument data." );
 	struct raw_token token = next_token( file );
 	compiler_assert( token.kind == identifier_token, token, error_level, "regsiter must be followed by type." );
-	root->child = ast_node_array_new( &file->node_raw );
-	root->child->token = token;
-	root->child->kind = type_node;
+	root->child->sibling = ast_node_array_new( &file->node_raw );
+	struct ast_node* value = root->child->sibling;
+	value->token = token;
+	value->kind = type_node;
 	token = next_token( file );
 	compiler_assert( token.kind == assignment_token, token, error_level, "register must be assigned a value." );
 	root->child->sibling = parse_expression( file, statement_end_token );
 }
 
-void parse_routine( struct source_file* file, struct ast_node* root ){
+void parse_type( struct source_file* file, struct ast_node* type, struct raw_token token ){
 	assert( file != NULL, "Malformed argument." );
-	assert( root != NULL, "Malformed argument." );
-	assert( root->child == NULL, "Malformed argument data." );
-	assert( root->kind == routine_node, "Malformed argument data." );
+	assert( type != NULL, "Malformed argument." );
+	while( 1 ){
+		if( token.kind == identifier_token ){
+			type->token = token;
+			type->kind = type_node;
+			break;
+		} else if( token.kind == array_token ){
+			type->token = token;
+			type->kind = array_node;
+			type->child = ast_node_array_new( &file->node_raw );
+			type = type->child;
+		} else if( token.kind == pointer_token ){
+			type->token = token;
+			type->kind = pointer_node;
+			type->child = ast_node_array_new( &file->node_raw );
+			type = type->child;
+		} else {
+			compiler_error( token, error_level, "Expected type." );
+		}
+		token = next_token( file );
+	}
+	return;
+}
+
+void parse_routine( struct source_file* file, struct ast_node* node ){
+	assert( file != NULL, "Malformed argument." );
+	assert( node != NULL, "Malformed argument." );
+	assert( node->child == NULL, "Malformed argument data." );
+	assert( node->kind == routine_node, "Malformed argument data." );
 	struct raw_token token = next_token( file );
 	compiler_assert( token.kind == routine_token, token, error_level, "Expected routine." );
 	token = next_token( file );
 	compiler_assert( token.kind == argument_open_token, token, error_level, "Routine arguments must start with '['." );
 	token = next_token( file );
-	compiler_assert( token.kind == identifier_token, token, error_level, "Invalid routine argument." );
-	root->child = ast_node_array_new( &file->node_raw );
-	root->child->token = token;
-	root->child->kind = argument_node;
+	node->child = ast_node_array_new( &file->node_raw );
+	node = node->child;
+	if( token.kind != argument_close_token ){
+		while( 1 ){
+			compiler_assert( token.kind == identifier_token, token, error_level, "Expected argument name." );
+			node->token = token;
+			node->kind = argument_node;
+			token = next_token( file );
+			node->child = ast_node_array_new( &file->node_raw );
+			parse_type( file, node->child, token );
+			token = next_token( file );
+			if( token.kind == argument_close_token ){
+				break;
+			}
+			compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ']' after procedure arguments." );
+			token = next_token( file );
+			node->sibling = ast_node_array_new( &file->node_raw );
+			node = node->sibling;
+		}
+	}
 	token = next_token( file );
-	compiler_assert( token.kind == identifier_token, token, error_level, "Invalid routine argument." );
-	root->child = ast_node_array_new( &file->node_raw );
-	root->child->token = token;
-	root->child->kind = type_node;
-	token = next_token( file );
-	compiler_assert( token.kind == argument_close_token, token, error_level, "Routine arguments must end with ']'." );
-	token = next_token( file );
-	compiler_assert( token.kind == statement_end_token, token, error_level, "Routine must end in a ';'." );
+	compiler_assert( token.kind == statement_end_token, token, error_level, "Expected ';' after procedure arguments." );
 }
 
 void parse_procedure( struct source_file* file, struct ast_node* root ){
@@ -815,62 +855,72 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->child == NULL, "Malformed argument data." );
 	assert( root->kind == procedure_node, "Malformed argument data." );
-	root->child = ast_node_array_new( &file->node_raw );
-	struct ast_node* routine = root->child;
-	routine->token = root->token;
-	routine->kind = routine_node;
 	struct raw_token token = next_token( file );
 	compiler_assert( token.kind == argument_open_token, token, error_level, "Expected '[' following procedure declaration." );
-	struct ast_node* statement = routine;
-	{ // return type
-		token = next_token( file );
-		compiler_assert( token.kind == identifier_token, token, error_level, "Expected return type to start procedure arguments." );
-		statement->child = ast_node_array_new( &file->node_raw );
-		statement = statement->child;
-		statement->token = token;
-		statement->kind = type_node;
-		token = next_token( file );
-		compiler_assert( token.kind == result_token, token, error_level, "Expected ':' after return type in procedure arguments." );
+	root->child = ast_node_array_new( &file->node_raw );
+	struct ast_node* return_type = root->child;
+	token = next_token( file );
+	if( token.kind != result_token ){
+		while( 1 ){
+			parse_type( file, return_type, token );
+			token = next_token( file );
+			return_type->sibling = ast_node_array_new( &file->node_raw );
+			return_type = return_type->sibling;
+			if( token.kind == result_token ){
+				break;
+			}
+			compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ':' after return type in procedure arguments." );
+		}
 	}
-	{ // arguments
-		token = next_token( file );
-		compiler_assert( token.kind == identifier_token, token, error_level, "Expected argument name." );
-		statement->sibling = ast_node_array_new( &file->node_raw );
-		statement = statement->sibling;
-		struct ast_node* argument = statement;
-		argument->token = token;
-		argument->kind = argument_node;
-		token = next_token( file );
-		compiler_assert( token.kind == array_token, token, error_level, "Start procedure must have one arugment of type '@@i8'." );
-		argument->child = ast_node_array_new( &file->node_raw );
-		argument = argument->child;
-		argument->token = token;
-		argument->kind = type_node;
-		token = next_token( file );
-		compiler_assert( token.kind == array_token, token, error_level, "Start procedure must have one arugment of type '@@i8'." );
-		argument->child = ast_node_array_new( &file->node_raw );
-		argument = argument->child;
-		argument->token = token;
-		argument->kind = type_node;
-		token = next_token( file );
-		compiler_assert( token.kind == identifier_token, token, error_level, "Start procedure must have one arugment of type '@@i8'." );
-		argument->child = ast_node_array_new( &file->node_raw );
-		argument = argument->child;
-		argument->token = token;
-		argument->kind = type_node;
-		token = next_token( file );
-		compiler_assert( token.kind == argument_close_token, token, error_level, "Expected ']' following procedure arguments." );
+	struct ast_node* routine = return_type;
+	routine->token = root->token;
+	routine->kind = routine_node;
+	routine->child = ast_node_array_new( &file->node_raw );
+	struct ast_node* statement = routine->child;
+	token = next_token( file );
+	if( token.kind != argument_close_token ){
+		while( 1 ){
+			compiler_assert( token.kind == identifier_token, token, error_level, "Expected argument name." );
+			statement->token = token;
+			statement->kind = argument_node;
+			token = next_token( file );
+			statement->child = ast_node_array_new( &file->node_raw );
+			parse_type( file, statement->child, token );
+			statement->sibling = ast_node_array_new( &file->node_raw );
+			statement = statement->sibling;
+			token = next_token( file );
+			if( token.kind == argument_close_token ){
+				break;
+			}
+			compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ']' after procedure arguments." );
+		}
 	}
 	token = next_token( file );
-	compiler_assert( token.kind == scope_open_token, token, error_level, "Expected '{' following procedue arguments." );
-	statement->sibling = ast_node_array_new( &file->node_raw );
-	statement = statement->sibling;
+	compiler_assert( token.kind == scope_open_token, token, error_level, "Expected '{' following procedure arguments." );
 	while( 1 ){
 		token = next_token( file );
 		if( token.kind == identifier_token ){
 			statement->token = token;
-			statement->kind = register_node;
-			parse_register( file, statement );
+			token = next_token( file );
+			if( token.kind == identifier_token || token.kind == array_token || token.kind == pointer_token ){
+				statement->kind = register_node;
+				statement->child = ast_node_array_new( &file->node_raw );
+				parse_type( file, statement->child, token );
+				token = next_token( file );
+				compiler_assert( token.kind == assignment_token, token, error_level, "Expected assignment '=' after register type." );
+				statement->child->sibling = parse_expression( file, statement_end_token );
+			} else if( token.kind == argument_open_token ){
+				statement->kind = procedure_call_node;
+				statement->child = parse_expression( file, argument_close_token );
+				token = next_token( file );
+				compiler_assert( token.kind == statement_end_token, token, error_level, "Expected ';' after procedure call." );
+			} else {
+				compiler_error( token, error_level, "Expected register or procedure call." );
+			}
+		} else if( token.kind == conditional_token ){
+			todo( "conditional" );
+		} else if( token.kind == selection_token ){
+			todo( "selection" );
 		} else if( token.kind == jump_token ){
 			statement->kind = jump_node;
 			parse_jump( file, statement );
@@ -920,14 +970,30 @@ void parse_file( struct ast_node* root ){
 	struct raw_token token = next_token( &file );
 	node->token = token;
 	while( 1 ){
+		if( token.kind == interpreter_mark_token ){
+			struct raw_token token = next_token( &file );
+			node->token = token;
+			todo( "interpreter" );
+		}
 		if( token.kind == identifier_token ){
 			token = next_token( &file );
 			if( token.kind == procedure_token ){
 				node->kind = procedure_node;
-				compiler_assert( char_array_equal( node->token.raw, "start", 5 ), node->token, error_level, "Compiler only supports start procedure." );
 				parse_procedure( &file, node );
+			} else if( token.kind == identifier_token ){
+				node->kind = register_node;
+				todo( "parse_global_register" );
+			} else if( token.kind == structure_token ){
+				node->kind = structure_node;
+				todo( "parse_structure" );
+			} else if( token.kind == union_token ){
+				node->kind = union_node;
+				todo( "parse_union" );
+			} else if( token.kind == enumeration_token ){
+				node->kind = enumeration_node;
+				todo( "parse_enumeration" );
 			} else {
-				compiler_error( token, error_level, "Compiler only supports procedures in global scope." );
+				compiler_error( token, error_level, "Unrecognized identifier type in global declaration." );
 			}
 		} else {
 			compiler_error( token, error_level, "Expected global declaration." );
@@ -936,7 +1002,6 @@ void parse_file( struct ast_node* root ){
 		if( file.index >= file.source.count ){
 			break;
 		}
-		compiler_error( token, error_level, "Compiler only supports start procedure in global scope." );
 	}
 }
 
