@@ -43,10 +43,10 @@ enum raw_token_kind {
 	jump_token,
 	assignment_token,
 	interpreter_mark_token,
-	pointer_token,
-	array_token,
 	conditional_token,
 	selection_token,
+	pointer_token,
+	array_token,
 	member_token,
 	addition_token,
 	subtraction_token,
@@ -82,12 +82,19 @@ enum ast_node_kind {
 	register_node,
 	type_node,
 	jump_node,
-	procedure_call_node,
+	call_node,
 	list_separator_node,
 	literal_number_node,
 	literal_string_node,
-	member_node,
+	expression_node,
+	conditional_node,
+	conditional_call_node,
+	conditional_jump_node,
+	selection_node,
+	selection_call_node,
+	selection_jump_node,
 	array_node,
+	member_node,
 	pointer_node,
 	addition_node,
 	subtraction_node,
@@ -170,45 +177,52 @@ struct output_context output = { 0 };
 
 char* node_kind_string( struct ast_node* node ){
 	switch( node->kind ){
-		case error_node:          return "error";
-		case file_node:           return "file";
-		case procedure_node:      return "procedure";
-		case routine_node:        return "routine";
-		case structure_node:      return "structure";
-		case union_node:          return "union";
-		case enumeration_node:    return "enumeration";
-		case argument_node:       return "argument";
-		case register_node:       return "register";
-		case type_node:           return "type";
-		case jump_node:           return "jump";
-		case procedure_call_node: return "call";
-		case list_separator_node: return "list_separator";
-		case literal_number_node: return "literal_number";
-		case literal_string_node: return "literal_string";
-		case array_node:          return "array";
-		case pointer_node:        return "pointer";
-		case member_node:         return "member";
-		case addition_node:       return "addition";
-		case subtraction_node:    return "subtraction";
-		case multiplication_node: return "multiplication";
-		case division_node:       return "division";
-		case modulo_node:         return "modulo";
-		case shift_right_node:    return "shift_right";
-		case shift_left_node:     return "shift_left";
-		case bit_not_node:        return "bit_not";
-		case bit_and_node:        return "bit_and";
-		case bit_or_node:         return "bit_or";
-		case bit_xor_node:        return "bit_xor";
-		case logical_not_node:    return "logical_not";
-		case logical_and_node:    return "logical_and";
-		case logical_or_node:     return "logical_or";
-		case equal_node:          return "equal";
-		case less_node:           return "less";
-		case greater_node:        return "greater";
-		case less_equal_node:     return "less_equal";
-		case greater_equal_node:  return "greater_equal";
-		case less_greater_node:   return "less_greater";
-		default:                  assert( false, "Unknown node kind" );
+		case error_node:             return "error";
+		case file_node:              return "file";
+		case procedure_node:         return "procedure";
+		case routine_node:           return "routine";
+		case structure_node:         return "structure";
+		case union_node:             return "union";
+		case enumeration_node:       return "enumeration";
+		case argument_node:          return "argument";
+		case register_node:          return "register";
+		case type_node:              return "type";
+		case jump_node:              return "jump";
+		case call_node:              return "call";
+		case list_separator_node:    return "list_separator";
+		case literal_number_node:    return "literal_number";
+		case literal_string_node:    return "literal_string";
+		case expression_node:        return "expression";
+		case conditional_node:       return "conditional";
+		case conditional_call_node:  return "conditional_call";
+		case conditional_jump_node:  return "conditional_jump";
+		case selection_node:         return "selection";
+		case selection_call_node:    return "selection_call";
+		case selection_jump_node:    return "selection_jump";
+		case array_node:             return "array";
+		case pointer_node:           return "pointer";
+		case member_node:            return "member";
+		case addition_node:          return "addition";
+		case subtraction_node:       return "subtraction";
+		case multiplication_node:    return "multiplication";
+		case division_node:          return "division";
+		case modulo_node:            return "modulo";
+		case shift_right_node:       return "shift_right";
+		case shift_left_node:        return "shift_left";
+		case bit_not_node:           return "bit_not";
+		case bit_and_node:           return "bit_and";
+		case bit_or_node:            return "bit_or";
+		case bit_xor_node:           return "bit_xor";
+		case logical_not_node:       return "logical_not";
+		case logical_and_node:       return "logical_and";
+		case logical_or_node:        return "logical_or";
+		case equal_node:             return "equal";
+		case less_node:              return "less";
+		case greater_node:           return "greater";
+		case less_equal_node:        return "less_equal";
+		case greater_equal_node:     return "greater_equal";
+		case less_greater_node:      return "less_greater";
+		default:                     assert( false, "Unknown node kind" );
 	}
 }
 
@@ -463,7 +477,7 @@ struct raw_token next_token( struct source_file* file ){
 		file->column += 1;
 		file->index += 1;
 		token.length += 1;
-		token.kind = expression_open_token;
+		token.kind = expression_close_token;
 	} else if( '{' == file->source.data[ file->index ]){
 		file->column += 1;
 		file->index += 1;
@@ -668,42 +682,59 @@ struct ast_node* parse_expression_operator( struct source_file* file, enum raw_t
 	}
 	struct ast_node* node = ast_node_array_new( &file->node_raw );
 	node->token = token;
-	if( token.kind == list_separator_token ){
-		node->kind = list_separator_node;
-	} else if( token.kind == addition_token ){
-		node->kind = addition_node;
-	} else if( token.kind == member_token ){
-		node->kind = member_node;
-	} else if( token.kind == array_token ){
-		node->kind = array_node;
-	} else if( token.kind == argument_open_token ){
-		node->kind = procedure_call_node;
-	} else {
-		compiler_error( token, error_level, "Expected expression operator." );
+	switch( token.kind ){
+		case list_separator_token:  node->kind = list_separator_node;  break;
+		case logical_and_token:     node->kind = logical_and_node;     break;
+		case logical_or_token:      node->kind = logical_or_node;      break;
+		case equal_token:           node->kind = equal_node;           break;
+		case less_token:            node->kind = less_node;            break;
+		case greater_token:         node->kind = greater_node;         break;
+		case less_equal_token:      node->kind = less_equal_node;      break;
+		case greater_equal_token:   node->kind = greater_equal_node;   break;
+		case less_greater_token:    node->kind = less_greater_node;    break;
+		case shift_left_token:      node->kind = shift_left_node;      break;
+		case shift_right_token:     node->kind = shift_right_node;     break;
+		case bit_and_token:         node->kind = bit_and_node;         break;
+		case bit_or_token:          node->kind = bit_or_node;          break;
+		case bit_xor_token:         node->kind = bit_xor_node;         break;
+		case addition_token:        node->kind = addition_node;        break;
+		case subtraction_token:     node->kind = subtraction_node;     break;
+		case multiplication_token:  node->kind = multiplication_node;  break;
+		case division_token:        node->kind = division_node;        break;
+		case modulo_token:          node->kind = modulo_node;          break;
+		case member_token:          node->kind = member_node;          break;
+		case array_token:           node->kind = array_node;           break;
+		case argument_open_token:   node->kind = call_node;            break;
+		default: compiler_error( token, error_level, "Expected expression operator." );
 	}
 	return node;
 }
 
-/*
-	1 = ,
-	2 = || &&
-	3 = == < > <= >= <>
-	4 = << >> & | ` + - * / %
-	5 = . @
-*/
-
 i8 precidence( struct ast_node* node ){
-	if( node == NULL ){
-		return 0;
-	}
-	if( node->kind == list_separator_node ){
-		return 1;
-	} else if( node->kind == addition_node ){
-		return 4;
-	} else if( node->kind == member_node ){
-		return 5;
-	} else if( node->kind == array_node ){
-		return 5;
+	assert( node != NULL, "Malformed argument." );
+	switch( node->kind ){
+		case list_separator_node:  return 1;
+		case logical_and_node:     return 2;
+		case logical_or_node:      return 2;
+		case equal_node:           return 3;
+		case less_node:            return 3;
+		case greater_node:         return 3;
+		case less_equal_node:      return 3;
+		case greater_equal_node:   return 3;
+		case less_greater_node:    return 3;
+		case shift_left_node:      return 4;
+		case shift_right_node:     return 4;
+		case bit_and_node:         return 4;
+		case bit_or_node:          return 4;
+		case bit_xor_node:         return 4;
+		case addition_node:        return 4;
+		case subtraction_node:     return 4;
+		case multiplication_node:  return 4;
+		case division_node:        return 4;
+		case modulo_node:          return 4;
+		case member_node:          return 5;
+		case array_node:           return 5;
+		default: break;
 	}
 	compiler_error( node->token, error_level, "Expected expression precidence operator." );
 	return 0;
@@ -716,10 +747,10 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 	if( operator == NULL ){
 		return operand;
 	}
-	if( operator->kind == procedure_call_node ){
-		operand->kind = procedure_call_node;
+	if( operator->kind == call_node ){
+		operand->kind = call_node;
 		operator = parse_expression( file, argument_close_token );
-		operand->sibling = operator;
+		operand->child = operator;
 		operator = parse_expression_operator( file, expected_post );
 		if( operator == NULL ){
 			return operand;
@@ -735,10 +766,10 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 			operator->sibling = operand;
 			break;
 		}
-		if( new_operator->kind == procedure_call_node ){
-			operand->kind = procedure_call_node;
+		if( new_operator->kind == call_node ){
+			operand->kind = call_node;
 			new_operator = parse_expression( file, argument_close_token );
-			operand->sibling = new_operator;
+			operand->child = new_operator;
 			new_operator = parse_expression_operator( file, expected_post );
 			if( new_operator == NULL ){
 				operator->sibling = operand;
@@ -750,13 +781,29 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 			operator->sibling = new_operator;
 			operator = new_operator;
 		} else {
-			unreachable
+			operator->sibling = operand;
+			struct ast_node* less_equal_precidence = NULL;
+			struct ast_node* i = root;
+			while( i->sibling != NULL ){
+				if( precidence( i ) <= precidence( new_operator )){
+					less_equal_precidence = i;
+				}
+				i = i->sibling;
+			}
+			if( less_equal_precidence != NULL ){
+				new_operator->child = less_equal_precidence->sibling;
+				less_equal_precidence->sibling = new_operator;
+			} else {
+				new_operator->child = root;
+				root = new_operator;
+			}
+			operator = new_operator;
 		}
 	}
 	return root;
 }
 
-void parse_jump( struct source_file* file, struct ast_node* node ){
+void parse_jump( struct source_file* file, struct ast_node* node, enum raw_token_kind expected_post ){
 	assert( file != NULL, "Malformed argument." );
 	assert( node != NULL, "Malformed argument." );
 	assert( node->child == NULL, "Malformed argument data." );
@@ -769,7 +816,7 @@ void parse_jump( struct source_file* file, struct ast_node* node ){
 	compiler_assert( token.kind == argument_open_token, token, error_level, "Expected '[' after jump location." );
 	node->child = parse_expression( file, argument_close_token );
 	token = next_token( file );
-	compiler_assert( token.kind == statement_end_token, token, error_level, "';' required at the end of every statement." );
+	compiler_assert( token.kind == expected_post, token, error_level, "Unexpected end of jump." );
 }
 
 void parse_register( struct source_file* file, struct ast_node* root ){
@@ -850,6 +897,57 @@ void parse_routine( struct source_file* file, struct ast_node* node ){
 	compiler_assert( token.kind == statement_end_token, token, error_level, "Expected ';' after procedure arguments." );
 }
 
+// not conditional expression, must be call or jump
+void parse_conditional( struct source_file* file, struct ast_node* conditional ){
+	assert( file != NULL, "Malformed argument." );
+	assert( conditional != NULL, "Malformed argument." );
+	assert( conditional->kind == conditional_node, "Malformed argument data." );
+	struct raw_token token = next_token( file );
+	compiler_assert( token.kind == expression_open_token, token, error_level, "Conditional expression must be wraped in '()'." );
+	conditional->child = ast_node_array_new( &file->node_raw );
+	struct ast_node* expression = conditional->child;
+	expression->token = token;
+	expression->kind = expression_node;
+	conditional->child->child = parse_expression( file, expression_close_token );
+	token = next_token( file );
+	compiler_assert( token.kind == result_token, token, error_level, "Conditional expression must be wraped in '()'." );
+	token = next_token( file );
+	conditional->child->sibling = ast_node_array_new( &file->node_raw );
+	struct ast_node* if_true = conditional->child->sibling;
+	if( token.kind == identifier_token ){
+		conditional->kind = conditional_call_node;
+		if_true->token = token;
+		if_true->kind = call_node;
+		token = next_token( file );
+		compiler_assert( token.kind == argument_open_token, token, error_level, "Expected '[' following procedure call." );
+		if_true->child = parse_expression( file, argument_close_token );
+		token = next_token( file );
+		compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ',' following true condition." );
+		token = next_token( file );
+		compiler_assert( token.kind == identifier_token, token, error_level, "Expected matching procedure call in contion." );
+		if_true->sibling = ast_node_array_new( &file->node_raw );
+		if_true->sibling->token = token;
+		if_true->sibling->kind = call_node;
+		token = next_token( file );
+		compiler_assert( token.kind == argument_open_token, token, error_level, "Expected '[' following procedure call." );
+		if_true->sibling->child = parse_expression( file, argument_close_token );
+		token = next_token( file );
+		compiler_assert( token.kind == statement_end_token, token, error_level, "Expected ';' at the end of a conditional." );
+	} else if( token.kind == jump_token ){
+		conditional->kind = conditional_jump_node;
+		if_true->token = token;
+		if_true->kind = jump_node;
+		parse_jump( file, if_true, list_separator_token );
+		token = next_token( file );
+		compiler_assert( token.kind == jump_token, token, error_level, "Expected matching jump in condition." );
+		if_true->sibling = ast_node_array_new( &file->node_raw );
+		if_true->sibling->kind = jump_node;
+		parse_jump( file, if_true->sibling, statement_end_token );
+	} else {
+		compiler_error( token, error_level, "Expected contidional jump or procedure call." );
+	}
+}
+
 void parse_procedure( struct source_file* file, struct ast_node* root ){
 	assert( file != NULL, "Malformed argument." );
 	assert( root != NULL, "Malformed argument." );
@@ -910,7 +1008,7 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 				compiler_assert( token.kind == assignment_token, token, error_level, "Expected assignment '=' after register type." );
 				statement->child->sibling = parse_expression( file, statement_end_token );
 			} else if( token.kind == argument_open_token ){
-				statement->kind = procedure_call_node;
+				statement->kind = call_node;
 				statement->child = parse_expression( file, argument_close_token );
 				token = next_token( file );
 				compiler_assert( token.kind == statement_end_token, token, error_level, "Expected ';' after procedure call." );
@@ -918,12 +1016,14 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 				compiler_error( token, error_level, "Expected register or procedure call." );
 			}
 		} else if( token.kind == conditional_token ){
-			todo( "conditional" );
+			statement->token = token;
+			statement->kind = conditional_node;
+			parse_conditional( file, statement );
 		} else if( token.kind == selection_token ){
 			todo( "selection" );
 		} else if( token.kind == jump_token ){
 			statement->kind = jump_node;
-			parse_jump( file, statement );
+			parse_jump( file, statement, statement_end_token );
 			token = next_token( file );
 			if( token.kind == identifier_token ){
 				routine->sibling = ast_node_array_new( &file->node_raw );
@@ -945,6 +1045,7 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 		statement->sibling = ast_node_array_new( &file->node_raw );
 		statement = statement->sibling;
 	}
+	print_ast();
 }
 
 void parse_file( struct ast_node* root ){
@@ -1099,7 +1200,7 @@ void validate_routine( struct ast_node* routine, struct ast_node* return_type, s
 			struct ast_node* value = statement->child->sibling;
 			if( node_is_operator( value )){
 				validate_expression( value, register_type, &available_register );
-			} else if( value->kind == procedure_call_node ){
+			} else if( value->kind == call_node ){
 				compiler_assert( char_array_equal( value->token.raw, "write_syscall", 13 ), value->token, error_level, "Procedure not defined." );
 				compiler_assert( value->sibling->kind == list_separator_node, value->token, error_level, "Procedure signature does not match." );
 				if( value->sibling->child->kind == literal_number_node ){
@@ -1220,9 +1321,9 @@ i32 output_add_string( struct ast_node* root ){
 	return output.literal_string_number - 1;
 }
 
-void output_procedure_call( struct ast_node* root, i32 statement_index ){
+void output_call( struct ast_node* root, i32 statement_index ){
 	assert( root != NULL, "Malformed argument." );
-	assert( root->kind == procedure_call_node, "Malformed argument." );
+	assert( root->kind == call_node, "Malformed argument." );
 	string_append( &output.file, "call ", 5 );
 	if( char_array_equal( root->token.raw, "write_syscall", 13 )){
 		string_append( &output.file, "i64 @write_syscall( i64 ", 24 );
@@ -1300,8 +1401,8 @@ void output_register( struct ast_node* root ){
 		} else {
 			assert( false, "Bad addition root not valid for now." );
 		}
-	} else if ( value->kind == procedure_call_node ){
-		output_procedure_call( value, statement_index );
+	} else if ( value->kind == call_node ){
+		output_call( value, statement_index );
 	} else {
 		assert( false, "Bad root not valid for now." );
 	}
