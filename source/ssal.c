@@ -1048,13 +1048,6 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 	print_ast();
 }
 
-void parse_structure( struct source_file* file, struct ast_node* structure ){
-	assert( file != NULL, "Malformed argument." );
-	assert( structure != NULL, "Malformed argument." );
-	assert( structure->child == NULL, "Malformed argument data." );
-	assert( structure->kind == procedure_node, "Malformed argument data." );
-}
-
 void parse_file( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->child == NULL, "Malformed argument data." );
