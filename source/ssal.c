@@ -1048,6 +1048,13 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 	print_ast();
 }
 
+void parse_structure( struct source_file* file, struct ast_node* structure ){
+	assert( file != NULL, "Malformed argument." );
+	assert( structure != NULL, "Malformed argument." );
+	assert( structure->child == NULL, "Malformed argument data." );
+	assert( structure->kind == procedure_node, "Malformed argument data." );
+}
+
 void parse_file( struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->child == NULL, "Malformed argument data." );
@@ -1083,7 +1090,11 @@ void parse_file( struct ast_node* root ){
 				parse_procedure( &file, node );
 			} else if( token.kind == identifier_token ){
 				node->kind = register_node;
-				todo( "parse_global_register" );
+				node->child = ast_node_array_new( &file.node_raw );
+				parse_type( &file, node->child, token );
+				token = next_token( &file );
+				compiler_assert( token.kind == assignment_token, token, error_level, "Expected assignment '=' after register type." );
+				node->child->sibling = parse_expression( &file, statement_end_token );
 			} else if( token.kind == structure_token ){
 				node->kind = structure_node;
 				todo( "parse_structure" );
@@ -1103,6 +1114,8 @@ void parse_file( struct ast_node* root ){
 		if( file.index >= file.source.count ){
 			break;
 		}
+		node->sibling = ast_node_array_new( &file.node_raw );
+		node = node->sibling;
 	}
 }
 
