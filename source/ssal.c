@@ -1127,7 +1127,6 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 		statement->sibling = new_node( file );
 		statement = statement->sibling;
 	}
-	print_ast();
 }
 
 void parse_file( struct ast_node* root ){
