@@ -803,7 +803,7 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 	return root;
 }
 
-void parse_jump( struct source_file* file, struct ast_node* node, enum raw_token_kind expected_post ){
+void parse_jump( struct source_file* file, struct ast_node* node ){
 	assert( file != NULL, "Malformed argument." );
 	assert( node != NULL, "Malformed argument." );
 	assert( node->child == NULL, "Malformed argument data." );
@@ -815,8 +815,6 @@ void parse_jump( struct source_file* file, struct ast_node* node, enum raw_token
 	token = next_token( file );
 	compiler_assert( token.kind == argument_open_token, token, error_level, "Expected '[' after jump location." );
 	node->child = parse_expression( file, argument_close_token );
-	token = next_token( file );
-	compiler_assert( token.kind == expected_post, token, error_level, "Unexpected end of jump." );
 }
 
 void parse_register( struct source_file* file, struct ast_node* root ){
@@ -924,7 +922,7 @@ void parse_conditional( struct source_file* file, struct ast_node* conditional )
 		token = next_token( file );
 		compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ',' following true condition." );
 		token = next_token( file );
-		compiler_assert( token.kind == identifier_token, token, error_level, "Expected matching procedure call in contion." );
+		compiler_assert( token.kind == identifier_token, token, error_level, "Expected matching procedure call in condition." );
 		if_true->sibling = ast_node_array_new( &file->node_raw );
 		if_true->sibling->token = token;
 		if_true->sibling->kind = call_node;
@@ -937,12 +935,88 @@ void parse_conditional( struct source_file* file, struct ast_node* conditional )
 		conditional->kind = conditional_jump_node;
 		if_true->token = token;
 		if_true->kind = jump_node;
-		parse_jump( file, if_true, list_separator_token );
+		parse_jump( file, if_true );
+		token = next_token( file );
+		compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ',' following true contition." );
 		token = next_token( file );
 		compiler_assert( token.kind == jump_token, token, error_level, "Expected matching jump in condition." );
 		if_true->sibling = ast_node_array_new( &file->node_raw );
 		if_true->sibling->kind = jump_node;
-		parse_jump( file, if_true->sibling, statement_end_token );
+		parse_jump( file, if_true->sibling );
+		token = next_token( file );
+		compiler_assert( token.kind == statement_end_token, token, error_level, "Epxected ';' after conditional." );
+	} else {
+		compiler_error( token, error_level, "Expected contidional jump or procedure call." );
+	}
+}
+
+// not selection expression, must be call or jump
+void parse_selection( struct source_file* file, struct ast_node* selection ){
+	assert( file != NULL, "Malformed argument." );
+	assert( selection != NULL, "Malformed argument." );
+	assert( selection->kind == selection_node, "Malformed argument data." );
+	struct raw_token token = next_token( file );
+	compiler_assert( token.kind == expression_open_token, token, error_level, "Conditional expression must be wraped in '()'." );
+	selection->child = ast_node_array_new( &file->node_raw );
+	struct ast_node* expression = selection->child;
+	expression->token = token;
+	expression->kind = expression_node;
+	selection->child->child = parse_expression( file, expression_close_token );
+	token = next_token( file );
+	compiler_assert( token.kind == result_token, token, error_level, "Conditional expression must be wraped in '()'." );
+	token = next_token( file );
+	selection->child->sibling = ast_node_array_new( &file->node_raw );
+	struct ast_node* no_match = selection->child->sibling;
+	if( token.kind == identifier_token ){
+		selection->kind = selection_call_node;
+		no_match->token = token;
+		no_match->kind = call_node;
+		token = next_token( file );
+		compiler_assert( token.kind == argument_open_token, token, error_level, "Expected '[' following procedure call." );
+		no_match->child = parse_expression( file, argument_close_token );
+		token = next_token( file );
+		compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ',' following default selection." );
+		struct ast_node* match = no_match;
+		while( 1 ){
+			match->sibling = parse_expression( file, result_token );
+			match = match->sibling;
+			token = next_token( file );
+			compiler_assert( token.kind == identifier_token, token, error_level, "Expected matching procedure call in selection." );
+			match->sibling = ast_node_array_new( &file->node_raw );
+			match = match->sibling;
+			match->token = token;
+			match->kind = call_node;
+			token = next_token( file );
+			compiler_assert( token.kind == argument_open_token, token, error_level, "Expected procedure call in selection." );
+			match->child = parse_expression( file, argument_close_token );
+			token = next_token( file );
+			if( token.kind == statement_end_token ){
+				break;
+			}
+			compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ';' at the end of a selection." );
+		}
+	} else if( token.kind == jump_token ){
+		selection->kind = selection_jump_node;
+		no_match->token = token;
+		no_match->kind = jump_node;
+		parse_jump( file, no_match );
+		token = next_token( file );
+		compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ',' following default selection." );
+		struct ast_node* match = no_match;
+		while( 1 ){
+			match->sibling = parse_expression( file, result_token );
+			match = match->sibling;
+			token = next_token( file );
+			compiler_assert( token.kind == jump_token, token, error_level, "Expected matching jump in selection." );
+			no_match->sibling = ast_node_array_new( &file->node_raw );
+			no_match->sibling->kind = jump_node;
+			parse_jump( file, no_match->sibling );
+			token = next_token( file );
+			if( token.kind == statement_end_token ){
+				break;
+			}
+			compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ';' at the end of a selection." );
+		}
 	} else {
 		compiler_error( token, error_level, "Expected contidional jump or procedure call." );
 	}
@@ -1020,10 +1094,14 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 			statement->kind = conditional_node;
 			parse_conditional( file, statement );
 		} else if( token.kind == selection_token ){
-			todo( "selection" );
+			statement->token = token;
+			statement->kind = selection_node;
+			parse_selection( file, statement );
 		} else if( token.kind == jump_token ){
 			statement->kind = jump_node;
-			parse_jump( file, statement, statement_end_token );
+			parse_jump( file, statement );
+			token = next_token( file );
+			compiler_assert( token.kind == statement_end_token, token, error_level, "Expected ';' after jump." );
 			token = next_token( file );
 			if( token.kind == identifier_token ){
 				routine->sibling = ast_node_array_new( &file->node_raw );
