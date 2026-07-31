@@ -96,6 +96,7 @@ enum ast_node_kind {
 	array_node,
 	member_node,
 	pointer_node,
+	derefrence_node,
 	addition_node,
 	subtraction_node,
 	multiplication_node,
@@ -201,6 +202,7 @@ char* node_kind_string( struct ast_node* node ){
 		case selection_jump_node:    return "selection_jump";
 		case array_node:             return "array";
 		case pointer_node:           return "pointer";
+		case derefrence_node:        return "derefrence";
 		case member_node:            return "member";
 		case addition_node:          return "addition";
 		case subtraction_node:       return "subtraction";
@@ -691,9 +693,14 @@ i8 precidence( struct ast_node* node ){
 	return 0;
 }
 
+struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind expected_post );
+
 struct ast_node* parse_expression_leaf( struct source_file* file ){
 	assert( file != NULL, "Malformed arguments." );
 	struct raw_token token = next_token( file );
+	if( token.kind == expression_open_token ){
+		return parse_expression( file, expression_close_token );
+	}
 	struct ast_node* node = new_node( file );
 	node->token = token;
 	if( token.kind == identifier_token ){
@@ -739,6 +746,7 @@ struct ast_node* parse_expression_operator( struct source_file* file, enum raw_t
 		case member_token:          node->kind = member_node;          break;
 		case array_token:           node->kind = array_node;           break;
 		case argument_open_token:   node->kind = call_node;            break;
+		case pointer_token:         node->kind = derefrence_node;      break;
 		default: compiler_error( token, error_level, "Expected expression operator." );
 	}
 	return node;
@@ -780,6 +788,15 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 				break;
 			}
 		}
+		while( new_operator->kind == derefrence_node ){
+			new_operator->child = operand;
+			operand = new_operator;
+			new_operator = parse_expression_operator( file, expected_post );
+			if( new_operator == NULL ){
+				operator->sibling = operand;
+				goto post_loop;
+			}
+		}
 		if( precidence( new_operator ) >= precidence( operator )){
 			new_operator->child = operand;
 			operator->sibling = new_operator;
@@ -804,6 +821,7 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 			operator = new_operator;
 		}
 	}
+post_loop:
 	return root;
 }
 
@@ -865,7 +883,7 @@ void parse_type( struct source_file* file, struct ast_node* type, struct raw_tok
 	return;
 }
 
-void parse_routine( struct source_file* file, struct ast_node* routine ){
+struct ast_node* parse_routine( struct source_file* file, struct ast_node* routine ){
 	assert( file != NULL, "Malformed argument." );
 	assert( routine != NULL, "Malformed argument." );
 	assert( routine->child == NULL, "Malformed argument data." );
@@ -897,6 +915,7 @@ void parse_routine( struct source_file* file, struct ast_node* routine ){
 	}
 	token = next_token( file );
 	compiler_assert( token.kind == statement_end_token, token, error_level, "Expected ';' after procedure arguments." );
+	return routine;
 }
 
 // not conditional expression, must be call or jump
@@ -1069,6 +1088,7 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 				break;
 			}
 			compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ']' after procedure arguments." );
+			token = next_token( file );
 		}
 	}
 	token = next_token( file );
@@ -1112,10 +1132,7 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 				routine = routine->sibling;
 				routine->token = token;
 				routine->kind = routine_node;
-				parse_routine( file, routine );
-				routine->child = new_node( file );
-				statement = routine->child;
-				continue;
+				statement = parse_routine( file, routine );
 			} else if( token.kind == scope_close_token ){
 				break;
 			} else {
