@@ -1154,17 +1154,9 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 			parse_jump( file, statement );
 			token = next_token( file );
 			compiler_assert( token.kind == statement_end_token, token, error_level, "Expected ';' after jump." );
-			token = next_token( file );
-			if( token.kind == identifier_token ){
-				routine->sibling = new_node( file );
-				routine = routine->sibling;
-				routine->token = token;
-				routine->kind = routine_node;
-				statement = parse_routine( file, routine );
-			} else if( token.kind == scope_close_token ){
+			statement = parse_routine_end( file, routine );
+			if( statement == NULL ){
 				break;
-			} else {
-				compiler_error( token, error_level, "Expected procedure close or routine." );
 			}
 		} else {
 			compiler_error( token, error_level, "Expected jump or register." );
