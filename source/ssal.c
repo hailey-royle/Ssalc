@@ -657,57 +657,8 @@ struct raw_token next_token( struct source_file* file ){
 	return token;
 }
 
-struct ast_node* parse_expression_leaf( struct source_file* file ){
-	assert( file != NULL, "Malformed arguments." );
-	struct raw_token token = next_token( file );
-	struct ast_node* node = ast_node_array_new( &file->node_raw );
-	node->token = token;
-	if( token.kind == identifier_token ){
-		node->kind = register_node;
-	} else if( token.kind == literal_number_token ){
-		node->kind = literal_number_node;
-	} else if( token.kind == literal_string_token ){
-		node->kind = literal_string_node;
-	} else {
-		compiler_error( token, error_level, "Expected expression leaf." );
-	}
-	return node;
-}
-
-struct ast_node* parse_expression_operator( struct source_file* file, enum raw_token_kind expected_post ){
-	assert( file != NULL, "Malformed arguments." );
-	struct raw_token token = next_token( file );
-	if( token.kind == expected_post ){
-		return NULL;
-	}
-	struct ast_node* node = ast_node_array_new( &file->node_raw );
-	node->token = token;
-	switch( token.kind ){
-		case list_separator_token:  node->kind = list_separator_node;  break;
-		case logical_and_token:     node->kind = logical_and_node;     break;
-		case logical_or_token:      node->kind = logical_or_node;      break;
-		case equal_token:           node->kind = equal_node;           break;
-		case less_token:            node->kind = less_node;            break;
-		case greater_token:         node->kind = greater_node;         break;
-		case less_equal_token:      node->kind = less_equal_node;      break;
-		case greater_equal_token:   node->kind = greater_equal_node;   break;
-		case less_greater_token:    node->kind = less_greater_node;    break;
-		case shift_left_token:      node->kind = shift_left_node;      break;
-		case shift_right_token:     node->kind = shift_right_node;     break;
-		case bit_and_token:         node->kind = bit_and_node;         break;
-		case bit_or_token:          node->kind = bit_or_node;          break;
-		case bit_xor_token:         node->kind = bit_xor_node;         break;
-		case addition_token:        node->kind = addition_node;        break;
-		case subtraction_token:     node->kind = subtraction_node;     break;
-		case multiplication_token:  node->kind = multiplication_node;  break;
-		case division_token:        node->kind = division_node;        break;
-		case modulo_token:          node->kind = modulo_node;          break;
-		case member_token:          node->kind = member_node;          break;
-		case array_token:           node->kind = array_node;           break;
-		case argument_open_token:   node->kind = call_node;            break;
-		default: compiler_error( token, error_level, "Expected expression operator." );
-	}
-	return node;
+struct ast_node* new_node( struct source_file* file ){
+	return ast_node_array_new( &file->node_raw );
 }
 
 i8 precidence( struct ast_node* node ){
@@ -738,6 +689,59 @@ i8 precidence( struct ast_node* node ){
 	}
 	compiler_error( node->token, error_level, "Expected expression precidence operator." );
 	return 0;
+}
+
+struct ast_node* parse_expression_leaf( struct source_file* file ){
+	assert( file != NULL, "Malformed arguments." );
+	struct raw_token token = next_token( file );
+	struct ast_node* node = new_node( file );
+	node->token = token;
+	if( token.kind == identifier_token ){
+		node->kind = register_node;
+	} else if( token.kind == literal_number_token ){
+		node->kind = literal_number_node;
+	} else if( token.kind == literal_string_token ){
+		node->kind = literal_string_node;
+	} else {
+		compiler_error( token, error_level, "Expected expression leaf." );
+	}
+	return node;
+}
+
+struct ast_node* parse_expression_operator( struct source_file* file, enum raw_token_kind expected_post ){
+	assert( file != NULL, "Malformed arguments." );
+	struct raw_token token = next_token( file );
+	if( token.kind == expected_post ){
+		return NULL;
+	}
+	struct ast_node* node = new_node( file );
+	node->token = token;
+	switch( token.kind ){
+		case list_separator_token:  node->kind = list_separator_node;  break;
+		case logical_and_token:     node->kind = logical_and_node;     break;
+		case logical_or_token:      node->kind = logical_or_node;      break;
+		case equal_token:           node->kind = equal_node;           break;
+		case less_token:            node->kind = less_node;            break;
+		case greater_token:         node->kind = greater_node;         break;
+		case less_equal_token:      node->kind = less_equal_node;      break;
+		case greater_equal_token:   node->kind = greater_equal_node;   break;
+		case less_greater_token:    node->kind = less_greater_node;    break;
+		case shift_left_token:      node->kind = shift_left_node;      break;
+		case shift_right_token:     node->kind = shift_right_node;     break;
+		case bit_and_token:         node->kind = bit_and_node;         break;
+		case bit_or_token:          node->kind = bit_or_node;          break;
+		case bit_xor_token:         node->kind = bit_xor_node;         break;
+		case addition_token:        node->kind = addition_node;        break;
+		case subtraction_token:     node->kind = subtraction_node;     break;
+		case multiplication_token:  node->kind = multiplication_node;  break;
+		case division_token:        node->kind = division_node;        break;
+		case modulo_token:          node->kind = modulo_node;          break;
+		case member_token:          node->kind = member_node;          break;
+		case array_token:           node->kind = array_node;           break;
+		case argument_open_token:   node->kind = call_node;            break;
+		default: compiler_error( token, error_level, "Expected expression operator." );
+	}
+	return node;
 }
 
 struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind expected_post ){
@@ -826,7 +830,7 @@ void parse_register( struct source_file* file, struct ast_node* root ){
 	assert( root->child->sibling == NULL, "Malformed argument data." );
 	struct raw_token token = next_token( file );
 	compiler_assert( token.kind == identifier_token, token, error_level, "regsiter must be followed by type." );
-	root->child->sibling = ast_node_array_new( &file->node_raw );
+	root->child->sibling = new_node( file );
 	struct ast_node* value = root->child->sibling;
 	value->token = token;
 	value->kind = type_node;
@@ -846,12 +850,12 @@ void parse_type( struct source_file* file, struct ast_node* type, struct raw_tok
 		} else if( token.kind == array_token ){
 			type->token = token;
 			type->kind = array_node;
-			type->child = ast_node_array_new( &file->node_raw );
+			type->child = new_node( file );
 			type = type->child;
 		} else if( token.kind == pointer_token ){
 			type->token = token;
 			type->kind = pointer_node;
-			type->child = ast_node_array_new( &file->node_raw );
+			type->child = new_node( file );
 			type = type->child;
 		} else {
 			compiler_error( token, error_level, "Expected type." );
@@ -871,7 +875,7 @@ void parse_routine( struct source_file* file, struct ast_node* node ){
 	token = next_token( file );
 	compiler_assert( token.kind == argument_open_token, token, error_level, "Routine arguments must start with '['." );
 	token = next_token( file );
-	node->child = ast_node_array_new( &file->node_raw );
+	node->child = new_node( file );
 	node = node->child;
 	if( token.kind != argument_close_token ){
 		while( 1 ){
@@ -879,7 +883,7 @@ void parse_routine( struct source_file* file, struct ast_node* node ){
 			node->token = token;
 			node->kind = argument_node;
 			token = next_token( file );
-			node->child = ast_node_array_new( &file->node_raw );
+			node->child = new_node( file );
 			parse_type( file, node->child, token );
 			token = next_token( file );
 			if( token.kind == argument_close_token ){
@@ -887,7 +891,7 @@ void parse_routine( struct source_file* file, struct ast_node* node ){
 			}
 			compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ']' after procedure arguments." );
 			token = next_token( file );
-			node->sibling = ast_node_array_new( &file->node_raw );
+			node->sibling = new_node( file );
 			node = node->sibling;
 		}
 	}
@@ -902,7 +906,7 @@ void parse_conditional( struct source_file* file, struct ast_node* conditional )
 	assert( conditional->kind == conditional_node, "Malformed argument data." );
 	struct raw_token token = next_token( file );
 	compiler_assert( token.kind == expression_open_token, token, error_level, "Conditional expression must be wraped in '()'." );
-	conditional->child = ast_node_array_new( &file->node_raw );
+	conditional->child = new_node( file );
 	struct ast_node* expression = conditional->child;
 	expression->token = token;
 	expression->kind = expression_node;
@@ -910,7 +914,7 @@ void parse_conditional( struct source_file* file, struct ast_node* conditional )
 	token = next_token( file );
 	compiler_assert( token.kind == result_token, token, error_level, "Conditional expression must be wraped in '()'." );
 	token = next_token( file );
-	conditional->child->sibling = ast_node_array_new( &file->node_raw );
+	conditional->child->sibling = new_node( file );
 	struct ast_node* if_true = conditional->child->sibling;
 	if( token.kind == identifier_token ){
 		conditional->kind = conditional_call_node;
@@ -923,7 +927,7 @@ void parse_conditional( struct source_file* file, struct ast_node* conditional )
 		compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ',' following true condition." );
 		token = next_token( file );
 		compiler_assert( token.kind == identifier_token, token, error_level, "Expected matching procedure call in condition." );
-		if_true->sibling = ast_node_array_new( &file->node_raw );
+		if_true->sibling = new_node( file );
 		if_true->sibling->token = token;
 		if_true->sibling->kind = call_node;
 		token = next_token( file );
@@ -940,7 +944,7 @@ void parse_conditional( struct source_file* file, struct ast_node* conditional )
 		compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ',' following true contition." );
 		token = next_token( file );
 		compiler_assert( token.kind == jump_token, token, error_level, "Expected matching jump in condition." );
-		if_true->sibling = ast_node_array_new( &file->node_raw );
+		if_true->sibling = new_node( file );
 		if_true->sibling->kind = jump_node;
 		parse_jump( file, if_true->sibling );
 		token = next_token( file );
@@ -957,7 +961,7 @@ void parse_selection( struct source_file* file, struct ast_node* selection ){
 	assert( selection->kind == selection_node, "Malformed argument data." );
 	struct raw_token token = next_token( file );
 	compiler_assert( token.kind == expression_open_token, token, error_level, "Conditional expression must be wraped in '()'." );
-	selection->child = ast_node_array_new( &file->node_raw );
+	selection->child = new_node( file );
 	struct ast_node* expression = selection->child;
 	expression->token = token;
 	expression->kind = expression_node;
@@ -965,7 +969,7 @@ void parse_selection( struct source_file* file, struct ast_node* selection ){
 	token = next_token( file );
 	compiler_assert( token.kind == result_token, token, error_level, "Conditional expression must be wraped in '()'." );
 	token = next_token( file );
-	selection->child->sibling = ast_node_array_new( &file->node_raw );
+	selection->child->sibling = new_node( file );
 	struct ast_node* no_match = selection->child->sibling;
 	if( token.kind == identifier_token ){
 		selection->kind = selection_call_node;
@@ -982,7 +986,7 @@ void parse_selection( struct source_file* file, struct ast_node* selection ){
 			match = match->sibling;
 			token = next_token( file );
 			compiler_assert( token.kind == identifier_token, token, error_level, "Expected matching procedure call in selection." );
-			match->sibling = ast_node_array_new( &file->node_raw );
+			match->sibling = new_node( file );
 			match = match->sibling;
 			match->token = token;
 			match->kind = call_node;
@@ -1008,7 +1012,7 @@ void parse_selection( struct source_file* file, struct ast_node* selection ){
 			match = match->sibling;
 			token = next_token( file );
 			compiler_assert( token.kind == jump_token, token, error_level, "Expected matching jump in selection." );
-			no_match->sibling = ast_node_array_new( &file->node_raw );
+			no_match->sibling = new_node( file );
 			no_match->sibling->kind = jump_node;
 			parse_jump( file, no_match->sibling );
 			token = next_token( file );
@@ -1029,14 +1033,14 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 	assert( root->kind == procedure_node, "Malformed argument data." );
 	struct raw_token token = next_token( file );
 	compiler_assert( token.kind == argument_open_token, token, error_level, "Expected '[' following procedure declaration." );
-	root->child = ast_node_array_new( &file->node_raw );
+	root->child = new_node( file );
 	struct ast_node* return_type = root->child;
 	token = next_token( file );
 	if( token.kind != result_token ){
 		while( 1 ){
 			parse_type( file, return_type, token );
 			token = next_token( file );
-			return_type->sibling = ast_node_array_new( &file->node_raw );
+			return_type->sibling = new_node( file );
 			return_type = return_type->sibling;
 			if( token.kind == result_token ){
 				break;
@@ -1047,7 +1051,7 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 	struct ast_node* routine = return_type;
 	routine->token = root->token;
 	routine->kind = routine_node;
-	routine->child = ast_node_array_new( &file->node_raw );
+	routine->child = new_node( file );
 	struct ast_node* statement = routine->child;
 	token = next_token( file );
 	if( token.kind != argument_close_token ){
@@ -1056,9 +1060,9 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 			statement->token = token;
 			statement->kind = argument_node;
 			token = next_token( file );
-			statement->child = ast_node_array_new( &file->node_raw );
+			statement->child = new_node( file );
 			parse_type( file, statement->child, token );
-			statement->sibling = ast_node_array_new( &file->node_raw );
+			statement->sibling = new_node( file );
 			statement = statement->sibling;
 			token = next_token( file );
 			if( token.kind == argument_close_token ){
@@ -1076,7 +1080,7 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 			token = next_token( file );
 			if( token.kind == identifier_token || token.kind == array_token || token.kind == pointer_token ){
 				statement->kind = register_node;
-				statement->child = ast_node_array_new( &file->node_raw );
+				statement->child = new_node( file );
 				parse_type( file, statement->child, token );
 				token = next_token( file );
 				compiler_assert( token.kind == assignment_token, token, error_level, "Expected assignment '=' after register type." );
@@ -1104,12 +1108,12 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 			compiler_assert( token.kind == statement_end_token, token, error_level, "Expected ';' after jump." );
 			token = next_token( file );
 			if( token.kind == identifier_token ){
-				routine->sibling = ast_node_array_new( &file->node_raw );
+				routine->sibling = new_node( file );
 				routine = routine->sibling;
 				routine->token = token;
 				routine->kind = routine_node;
 				parse_routine( file, routine );
-				routine->child = ast_node_array_new( &file->node_raw );
+				routine->child = new_node( file );
 				statement = routine->child;
 				continue;
 			} else if( token.kind == scope_close_token ){
@@ -1120,7 +1124,7 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 		} else {
 			compiler_error( token, error_level, "Expected jump or register." );
 		}
-		statement->sibling = ast_node_array_new( &file->node_raw );
+		statement->sibling = new_node( file );
 		statement = statement->sibling;
 	}
 	print_ast();
@@ -1144,7 +1148,7 @@ void parse_file( struct ast_node* root ){
 	};
 	bool error = string_from_file( &file.source, root->token.raw );
 	compiler_assert( !error, root->token, error_level, "Unable to read from file \"%s\"", root->token.raw );
-	root->child = ast_node_array_new( &file.node_raw );
+	root->child = new_node( &file );
 	struct ast_node* node = root->child;
 	struct raw_token token = next_token( &file );
 	node->token = token;
@@ -1161,7 +1165,7 @@ void parse_file( struct ast_node* root ){
 				parse_procedure( &file, node );
 			} else if( token.kind == identifier_token ){
 				node->kind = register_node;
-				node->child = ast_node_array_new( &file.node_raw );
+				node->child = new_node( &file );
 				parse_type( &file, node->child, token );
 				token = next_token( &file );
 				compiler_assert( token.kind == assignment_token, token, error_level, "Expected assignment '=' after register type." );
@@ -1185,7 +1189,7 @@ void parse_file( struct ast_node* root ){
 		if( file.index >= file.source.count ){
 			break;
 		}
-		node->sibling = ast_node_array_new( &file.node_raw );
+		node->sibling = new_node( &file );
 		node = node->sibling;
 	}
 }
