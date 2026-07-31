@@ -20,7 +20,7 @@ struct string {
 
 #include "string.h"
 
-enum raw_token_kind {
+enum ast_token_kind {
 	error_token,
 	identifier_token,
 	procedure_token,
@@ -119,20 +119,20 @@ enum ast_node_kind {
 	less_greater_node,
 };
 
-struct raw_token {
+struct ast_token {
 	char* file;
 	char* raw;
 	i32 file_length;
 	i32 length;
 	i32 line;
 	i32 column;
-	enum raw_token_kind kind;
+	enum ast_token_kind kind;
 };
 
 struct ast_node {
 	struct ast_node* sibling; // right-ish
 	struct ast_node* child;   // left-ish
-	struct raw_token token;
+	struct ast_token token;
 	enum ast_node_kind kind;
 };
 
@@ -246,7 +246,7 @@ void print_ast(){
 	printf( "\n==== Ast End ====\n\n" );
 }
 
-void compiler_error( struct raw_token problem, enum compiler_error_level level, char* format, ... ){
+void compiler_error( struct ast_token problem, enum compiler_error_level level, char* format, ... ){
         assert( problem.file != NULL, "Malformed argument." );
         assert( problem.raw != NULL, "Malformed argument." );
         assert( problem.length > 0, "Malformed argument." );
@@ -324,7 +324,7 @@ bool char_is_integer( char c ){
 	return ( c >= '0' && c <= '9' ) || c == '_';
 }
 
-struct raw_token next_token( struct source_file* file ){
+struct ast_token next_token( struct source_file* file ){
 	assert( file != NULL, "Malformed argument." );
 	assert( file->root != NULL, "Malformed argument data." );
 	assert( file->source.data != NULL, "Malformed argument data." );
@@ -332,7 +332,7 @@ struct raw_token next_token( struct source_file* file ){
 	assert( file->source.count > file->index, "Malformed argument data." );
 	assert( file->name != NULL, "Malformed argument data." );
 	assert( file->name_length > 0, "Malformed argument data." );
-	struct raw_token token = { 0 };
+	struct ast_token token = { 0 };
 	token.file = file->name;
 	token.file_length = file->name_length;
 	while( char_is_space( file->source.data[ file->index ])){
@@ -698,12 +698,11 @@ i8 precidence( struct ast_node* node ){
 	return 0;
 }
 
-struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind expected_post );
+struct ast_node* parse_expression( struct source_file* file, enum ast_token_kind expected_post );
 
 struct ast_node* parse_expression_leaf( struct source_file* file ){
 	assert( file != NULL, "Malformed arguments." );
-	assert( expected_post != error_token, "Malformed arguments." );
-	struct raw_token token = next_token( file );
+	struct ast_token token = next_token( file );
 	if( token.kind == expression_open_token ){
 		return parse_expression( file, expression_close_token );
 	}
@@ -721,10 +720,10 @@ struct ast_node* parse_expression_leaf( struct source_file* file ){
 	return node;
 }
 
-struct ast_node* parse_expression_operator( struct source_file* file, enum raw_token_kind expected_post ){
+struct ast_node* parse_expression_operator( struct source_file* file, enum ast_token_kind expected_post ){
 	assert( file != NULL, "Malformed arguments." );
 	assert( expected_post != error_token, "Malformed arguments." );
-	struct raw_token token = next_token( file );
+	struct ast_token token = next_token( file );
 	if( token.kind == expected_post ){
 		return NULL;
 	}
@@ -759,7 +758,7 @@ struct ast_node* parse_expression_operator( struct source_file* file, enum raw_t
 	return node;
 }
 
-struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind expected_post ){
+struct ast_node* parse_expression( struct source_file* file, enum ast_token_kind expected_post ){
 	assert( file != NULL, "Malformed arguments." );
 	assert( expected_post != error_token, "Malformed arguments." );
 	struct ast_node* operand = parse_expression_leaf( file );
@@ -846,7 +845,7 @@ void parse_jump( struct source_file* file, struct ast_node* node ){
 	assert( node != NULL, "Malformed argument." );
 	assert( node->child == NULL, "Malformed argument data." );
 	assert( node->kind == jump_node, "Malformed argument data." );
-	struct raw_token token = next_token( file );
+	struct ast_token token = next_token( file );
 	compiler_assert( token.kind == identifier_token, token, error_level, "Expected jump location." );
 	node->token = token;
 	node->kind = jump_node;
@@ -862,7 +861,7 @@ void parse_register( struct source_file* file, struct ast_node* root ){
 	assert( root->child != NULL, "Malformed argument data." );
 	assert( root->child->kind == type_node, "Malformed argument data." );
 	assert( root->child->sibling == NULL, "Malformed argument data." );
-	struct raw_token token = next_token( file );
+	struct ast_token token = next_token( file );
 	compiler_assert( token.kind == identifier_token, token, error_level, "regsiter must be followed by type." );
 	root->child->sibling = new_node( file );
 	struct ast_node* value = root->child->sibling;
@@ -873,7 +872,7 @@ void parse_register( struct source_file* file, struct ast_node* root ){
 	root->child->sibling = parse_expression( file, statement_end_token );
 }
 
-void parse_type( struct source_file* file, struct ast_node* type, struct raw_token token ){
+void parse_type( struct source_file* file, struct ast_node* type, struct ast_token token ){
 	assert( file != NULL, "Malformed argument." );
 	assert( type != NULL, "Malformed argument." );
 	while( 1 ){
@@ -904,7 +903,7 @@ struct ast_node* parse_routine( struct source_file* file, struct ast_node* routi
 	assert( routine != NULL, "Malformed argument." );
 	assert( routine->child == NULL, "Malformed argument data." );
 	assert( routine->kind == routine_node, "Malformed argument data." );
-	struct raw_token token = next_token( file );
+	struct ast_token token = next_token( file );
 	compiler_assert( token.kind == routine_token, token, error_level, "Expected routine." );
 	token = next_token( file );
 	compiler_assert( token.kind == argument_open_token, token, error_level, "Routine arguments must start with '['." );
@@ -939,7 +938,7 @@ void parse_conditional( struct source_file* file, struct ast_node* conditional )
 	assert( file != NULL, "Malformed argument." );
 	assert( conditional != NULL, "Malformed argument." );
 	assert( conditional->kind == conditional_node, "Malformed argument data." );
-	struct raw_token token = next_token( file );
+	struct ast_token token = next_token( file );
 	compiler_assert( token.kind == expression_open_token, token, error_level, "Conditional expression must be wraped in '()'." );
 	conditional->child = new_node( file );
 	struct ast_node* expression = conditional->child;
@@ -994,7 +993,7 @@ void parse_selection( struct source_file* file, struct ast_node* selection ){
 	assert( file != NULL, "Malformed argument." );
 	assert( selection != NULL, "Malformed argument." );
 	assert( selection->kind == selection_node, "Malformed argument data." );
-	struct raw_token token = next_token( file );
+	struct ast_token token = next_token( file );
 	compiler_assert( token.kind == expression_open_token, token, error_level, "Conditional expression must be wraped in '()'." );
 	selection->child = new_node( file );
 	struct ast_node* expression = selection->child;
@@ -1062,7 +1061,7 @@ void parse_selection( struct source_file* file, struct ast_node* selection ){
 }
 
 struct ast_node* parse_routine_end( struct source_file* file, struct ast_node* routine ){
-	struct raw_token token = next_token( file );
+	struct ast_token token = next_token( file );
 	if( token.kind == identifier_token ){
 		routine->sibling = new_node( file );
 		routine = routine->sibling;
@@ -1082,7 +1081,7 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 	assert( root != NULL, "Malformed argument." );
 	assert( root->child == NULL, "Malformed argument data." );
 	assert( root->kind == procedure_node, "Malformed argument data." );
-	struct raw_token token = next_token( file );
+	struct ast_token token = next_token( file );
 	compiler_assert( token.kind == argument_open_token, token, error_level, "Expected '[' following procedure declaration." );
 	root->child = new_node( file );
 	struct ast_node* return_type = root->child;
@@ -1202,11 +1201,11 @@ void parse_file( struct ast_node* root ){
 	compiler_assert( !error, root->token, error_level, "Unable to read from file \"%s\"", root->token.raw );
 	root->child = new_node( &file );
 	struct ast_node* node = root->child;
-	struct raw_token token = next_token( &file );
+	struct ast_token token = next_token( &file );
 	node->token = token;
 	while( 1 ){
 		if( token.kind == interpreter_mark_token ){
-			struct raw_token token = next_token( &file );
+			struct ast_token token = next_token( &file );
 			node->token = token;
 			todo( "interpreter" );
 		}
