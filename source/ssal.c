@@ -702,6 +702,7 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 
 struct ast_node* parse_expression_leaf( struct source_file* file ){
 	assert( file != NULL, "Malformed arguments." );
+	assert( expected_post != error_token, "Malformed arguments." );
 	struct raw_token token = next_token( file );
 	if( token.kind == expression_open_token ){
 		return parse_expression( file, expression_close_token );
@@ -722,6 +723,7 @@ struct ast_node* parse_expression_leaf( struct source_file* file ){
 
 struct ast_node* parse_expression_operator( struct source_file* file, enum raw_token_kind expected_post ){
 	assert( file != NULL, "Malformed arguments." );
+	assert( expected_post != error_token, "Malformed arguments." );
 	struct raw_token token = next_token( file );
 	if( token.kind == expected_post ){
 		return NULL;
@@ -759,6 +761,7 @@ struct ast_node* parse_expression_operator( struct source_file* file, enum raw_t
 
 struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind expected_post ){
 	assert( file != NULL, "Malformed arguments." );
+	assert( expected_post != error_token, "Malformed arguments." );
 	struct ast_node* operand = parse_expression_leaf( file );
 	struct ast_node* operator = parse_expression_operator( file, expected_post );
 	if( operator == NULL ){
