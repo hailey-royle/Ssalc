@@ -632,6 +632,11 @@ struct raw_token next_token( struct source_file* file ){
 			file->index += 1;
 			token.length += 1;
 			token.kind = less_equal_token;
+		} else if( '>' == file->source.data[ file->index ]){
+			file->column += 1;
+			file->index += 1;
+			token.length += 1;
+			token.kind = less_greater_token;
 		} else {
 			token.kind = less_token;
 		}
