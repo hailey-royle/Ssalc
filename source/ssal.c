@@ -865,34 +865,34 @@ void parse_type( struct source_file* file, struct ast_node* type, struct raw_tok
 	return;
 }
 
-void parse_routine( struct source_file* file, struct ast_node* node ){
+void parse_routine( struct source_file* file, struct ast_node* routine ){
 	assert( file != NULL, "Malformed argument." );
-	assert( node != NULL, "Malformed argument." );
-	assert( node->child == NULL, "Malformed argument data." );
-	assert( node->kind == routine_node, "Malformed argument data." );
+	assert( routine != NULL, "Malformed argument." );
+	assert( routine->child == NULL, "Malformed argument data." );
+	assert( routine->kind == routine_node, "Malformed argument data." );
 	struct raw_token token = next_token( file );
 	compiler_assert( token.kind == routine_token, token, error_level, "Expected routine." );
 	token = next_token( file );
 	compiler_assert( token.kind == argument_open_token, token, error_level, "Routine arguments must start with '['." );
 	token = next_token( file );
-	node->child = new_node( file );
-	node = node->child;
+	routine->child = new_node( file );
+	routine = routine->child;
 	if( token.kind != argument_close_token ){
 		while( 1 ){
 			compiler_assert( token.kind == identifier_token, token, error_level, "Expected argument name." );
-			node->token = token;
-			node->kind = argument_node;
+			routine->token = token;
+			routine->kind = argument_node;
 			token = next_token( file );
-			node->child = new_node( file );
-			parse_type( file, node->child, token );
+			routine->child = new_node( file );
+			parse_type( file, routine->child, token );
 			token = next_token( file );
 			if( token.kind == argument_close_token ){
 				break;
 			}
 			compiler_assert( token.kind == list_separator_token, token, error_level, "Expected ']' after procedure arguments." );
 			token = next_token( file );
-			node->sibling = new_node( file );
-			node = node->sibling;
+			routine->sibling = new_node( file );
+			routine = routine->sibling;
 		}
 	}
 	token = next_token( file );
