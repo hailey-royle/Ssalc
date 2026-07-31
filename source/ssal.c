@@ -1045,6 +1045,22 @@ void parse_selection( struct source_file* file, struct ast_node* selection ){
 	}
 }
 
+struct ast_node* parse_routine_end( struct source_file* file, struct ast_node* routine ){
+	struct raw_token token = next_token( file );
+	if( token.kind == identifier_token ){
+		routine->sibling = new_node( file );
+		routine = routine->sibling;
+		routine->token = token;
+		routine->kind = routine_node;
+		return parse_routine( file, routine );
+	} else if( token.kind == scope_close_token ){
+		return NULL;
+	} else {
+		compiler_error( token, error_level, "Expected procedure close or routine." );
+	}
+	return NULL;
+}
+
 void parse_procedure( struct source_file* file, struct ast_node* root ){
 	assert( file != NULL, "Malformed argument." );
 	assert( root != NULL, "Malformed argument." );
@@ -1117,10 +1133,22 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 			statement->token = token;
 			statement->kind = conditional_node;
 			parse_conditional( file, statement );
+			if( statement->kind == conditional_jump_node ){
+				statement = parse_routine_end( file, routine );
+				if( statement == NULL ){
+					break;
+				}
+			}
 		} else if( token.kind == selection_token ){
 			statement->token = token;
 			statement->kind = selection_node;
 			parse_selection( file, statement );
+			if( statement->kind == selection_jump_node ){
+				statement = parse_routine_end( file, routine );
+				if( statement == NULL ){
+					break;
+				}
+			}
 		} else if( token.kind == jump_token ){
 			statement->kind = jump_node;
 			parse_jump( file, statement );
