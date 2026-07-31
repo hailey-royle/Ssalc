@@ -773,6 +773,14 @@ struct ast_node* parse_expression( struct source_file* file, enum raw_token_kind
 			return operand;
 		}
 	}
+	while( operator->kind == derefrence_node ){
+		operator->child = operand;
+		operand = operator;
+		operator = parse_expression_operator( file, expected_post );
+		if( operator == NULL ){
+			return operand;
+		}
+	}
 	struct ast_node* root = { 0 };
 	root = operator;
 	operator->child = operand;
