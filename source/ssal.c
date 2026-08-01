@@ -429,6 +429,7 @@ void print_ast_node( struct source_file* file, struct ast_node* node, i32 depth 
 void print_ast(){
 	printf( "\n=== Ast Start ===\n\n" );
 	for( int i = 0; i < source.count; i++ ){
+	        printf( "%sfile%s  [ %.*s ]\n", ansi_foreground_cyan, ansi_reset_graphics, source.data[ i ].name_length, source.data[ i ].name );
 	        print_ast_node( &source.data[ i ], source.data[ i ].root, 1 );
 	}
 	printf( "\n==== Ast End ====\n\n" );
