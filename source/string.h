@@ -1,11 +1,14 @@
 #ifndef STRINGH
 #define STRINGH
 
-bool string_from_file( struct string* source, char* filename ){
+bool string_from_file( struct string* source, char* file_name, i32 name_length ){
 	assert( source != NULL, "Malformed args" );
 	assert( source->allocated == 0 && source->count == 0 && source->data == NULL, "String must be empty" );
-	assert( filename != NULL, "Malformed args" );
-	FILE* file = fopen( filename, "r" );
+	assert( file_name != NULL, "Malformed args" );
+	char name[ name_length + 1 ];
+	memcpy( name, file_name, name_length );
+	name[ name_length ] = '\0';
+	FILE* file = fopen( file_name, "r" );
 	if( file == NULL ){
 		return true;
 	};
@@ -31,11 +34,11 @@ bool string_from_file( struct string* source, char* filename ){
 	return false;
 }
 
-bool string_to_file( struct string* source, char* filename ){
+bool string_to_file( struct string* source, char* file_name ){
 	assert( source != NULL, "Malformed args" );
 	assert( source->allocated > source->count || source->count <= 0, "Malformed internal source data" );
-	assert( filename != NULL, "Malformed args" );
-	FILE* file = fopen( filename, "w" );
+	assert( file_name != NULL, "Malformed args" );
+	FILE* file = fopen( file_name, "w" );
 	if( file == NULL ){
 		return true;
 	}
