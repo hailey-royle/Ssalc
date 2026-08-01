@@ -1013,30 +1013,35 @@ void parse_register( struct source_file* file, struct ast_node* root ){
 	root->child->sibling = parse_expression( file, statement_end_token );
 }
 
-void parse_type( struct source_file* file, struct ast_node* type, struct ast_token token ){
+struct ast_token parse_type( struct source_file* file, struct ast_node* type, struct ast_token token ){
 	assert( file != NULL, "Malformed argument." );
 	assert( type != NULL, "Malformed argument." );
 	while( 1 ){
 		if( token.kind == identifier_token ){
 			type->offset = token.offset;
 			type->kind = type_node;
+			token = next_token( file );
 			break;
 		} else if( token.kind == array_token ){
 			type->offset = token.offset;
 			type->kind = array_node;
 			type->child = new_node( file );
 			type = type->child;
+			token = next_token( file );
 		} else if( token.kind == pointer_token ){
 			type->offset = token.offset;
 			type->kind = pointer_node;
 			type->child = new_node( file );
 			type = type->child;
+			token = next_token( file );
+			if( token.kind == assignment_token ){
+				break;
+			}
 		} else {
 			compiler_error_token( file, token, error_level, "Expected type." );
 		}
-		token = next_token( file );
 	}
-	return;
+	return token;
 }
 
 struct ast_node* parse_routine( struct source_file* file, struct ast_node* routine ){
@@ -1058,8 +1063,7 @@ struct ast_node* parse_routine( struct source_file* file, struct ast_node* routi
 			routine->kind = argument_node;
 			token = next_token( file );
 			routine->child = new_node( file );
-			parse_type( file, routine->child, token );
-			token = next_token( file );
+			token = parse_type( file, routine->child, token );
 			if( token.kind == argument_close_token ){
 				break;
 			}
@@ -1229,8 +1233,7 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 	token = next_token( file );
 	if( token.kind != result_token ){
 		while( 1 ){
-			parse_type( file, return_type, token );
-			token = next_token( file );
+			token = parse_type( file, return_type, token );
 			return_type->sibling = new_node( file );
 			return_type = return_type->sibling;
 			if( token.kind == result_token ){
@@ -1252,13 +1255,12 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 			statement->kind = argument_node;
 			token = next_token( file );
 			statement->child = new_node( file );
-			parse_type( file, statement->child, token );
-			statement->sibling = new_node( file );
-			statement = statement->sibling;
-			token = next_token( file );
+			token = parse_type( file, statement->child, token );
 			if( token.kind == argument_close_token ){
 				break;
 			}
+			statement->sibling = new_node( file );
+			statement = statement->sibling;
 			compiler_assert_token( token.kind == list_separator_token, file, token, error_level, "Expected ']' after procedure arguments." );
 			token = next_token( file );
 		}
@@ -1273,8 +1275,7 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 			if( token.kind == identifier_token || token.kind == array_token || token.kind == pointer_token ){
 				statement->kind = register_node;
 				statement->child = new_node( file );
-				parse_type( file, statement->child, token );
-				token = next_token( file );
+				token = parse_type( file, statement->child, token );
 				compiler_assert_token( token.kind == assignment_token, file, token, error_level, "Expected assignment '=' after register type." );
 				statement->child->sibling = parse_expression( file, statement_end_token );
 			} else if( token.kind == argument_open_token ){
@@ -1353,8 +1354,7 @@ void parse_file( char* file_name ){
 			} else if( token.kind == identifier_token ){
 				node->kind = register_node;
 				node->child = new_node( file );
-				parse_type( file, node->child, token );
-				token = next_token( file );
+				token = parse_type( file, node->child, token );
 				compiler_assert_token( token.kind == assignment_token, file, token, error_level, "Expected assignment '=' after register type." );
 				node->child->sibling = parse_expression( file, statement_end_token );
 			} else if( token.kind == structure_token ){
