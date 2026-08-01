@@ -463,7 +463,7 @@ void compiler_error_line_two( struct source_file* file, i32 problem_offset, i32 
 		start -= 1;
 	}
 	i32 problem_column = &file->source.data[ problem_offset ] - start;
-	i32 problem_line = 0;
+	i32 problem_line = 1;
 	for( int i = 0; i < problem_offset; i++ ){
 		if( file->source.data[ i ] == '\n' ){
 			problem_line += 1;
