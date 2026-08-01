@@ -324,14 +324,10 @@ i32 node_length( struct source_file* file, struct ast_node* node ){
 		case less_greater_node:
 			return 2;
 		case union_node:
-			return 5;
 		case routine_node:
-			return 7;
 		case structure_node:
 		case procedure_node:
-			return 9;
 		case enumeration_node:
-			return 11;
 		case jump_node:
 		case argument_node:
 		case register_node:
