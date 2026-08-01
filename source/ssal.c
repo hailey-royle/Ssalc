@@ -100,6 +100,7 @@ enum ast_node_kind {
 	derefrence_node,
 	addition_node,
 	subtraction_node,
+	negation_node,
 	multiplication_node,
 	division_node,
 	modulo_node,
@@ -302,6 +303,7 @@ i32 node_length( struct source_file* file, struct ast_node* node ){
 		case derefrence_node:
 		case addition_node:
 		case subtraction_node:
+		case negation_node:
 		case multiplication_node:
 		case division_node:
 		case modulo_node:
@@ -393,6 +395,7 @@ char* node_kind_string( struct ast_node* node ){
 		case member_node:            return "member";
 		case addition_node:          return "addition";
 		case subtraction_node:       return "subtraction";
+		case negation_node:          return "negation";
 		case multiplication_node:    return "multiplication";
 		case division_node:          return "division";
 		case modulo_node:            return "modulo";
@@ -790,7 +793,7 @@ i8 precidence( struct source_file* file, struct ast_node* node ){
 
 struct ast_node* parse_expression( struct source_file* file, enum ast_token_kind expected_post );
 
-struct ast_node* parse_scope_expression( struct source_file* file, enum ast_token_kind expected_post ){
+struct ast_node* parse_scope_expression( struct source_file* file ){
 	assert( file != NULL, "Malformed arguments." );
 	struct ast_token token = next_token( file );
 	struct ast_node* root = new_node( file );
@@ -807,8 +810,6 @@ struct ast_node* parse_scope_expression( struct source_file* file, enum ast_toke
 			break;
 		}
 	}
-	token = next_token( file );
-	compiler_assert_token( token.kind == expected_post, file, token, error_level, "Expected scope identifier." );
 	return root;
 }
 
@@ -818,11 +819,30 @@ struct ast_node* parse_expression_leaf( struct source_file* file ){
 	if( token.kind == expression_open_token ){
 		return parse_expression( file, expression_close_token );
 	}
-	struct ast_node* node = new_node( file );
+	struct ast_node* root = new_node( file );
+	struct ast_node* node = root;
 	node->offset = token.offset;
+	while( 1 ){
+		if( token.kind == array_token ){
+			node->kind = array_node;
+		} else if( token.kind == pointer_token ){
+			node->kind = pointer_node;
+		} else if( token.kind == subtraction_token ){
+			node->kind = negation_node;
+		} else if( token.kind == bit_not_token ){
+			node->kind = bit_not_node;
+		} else if( token.kind == logical_not_token ){
+			node->kind = logical_not_node;
+		} else {
+			break;
+		}
+		token = next_token( file );
+		node->child = new_node( file );
+		node = node->child;
+	}
 	if( token.kind == scope_open_token ){
 		node->kind = composite_value_node;
-		node->child = parse_scope_expression( file, statement_end_token );
+		node->child = parse_scope_expression( file );
 	} else if( token.kind == identifier_token ){
 		node->kind = register_node;
 	} else if( token.kind == literal_number_token ){
@@ -832,7 +852,7 @@ struct ast_node* parse_expression_leaf( struct source_file* file ){
 	} else {
 		compiler_error_token( file, token, error_level, "Expected expression leaf." );
 	}
-	return node;
+	return root;
 }
 
 struct ast_node* parse_expression_operator( struct source_file* file, enum ast_token_kind expected_post ){
