@@ -19,7 +19,7 @@ parse_command_line_argumnets procedure[ @@i8 : argc i32, argv ^^i8 ]{
 
 	found_argument routine[];
 		next_argument ^@i8 = argument@( index );
-		next_argument^ = { data = argv@( index )^, count = count };
+		next_argument^ = { data = argv@( index )^; count = count; };
 		?( argv@( index )^ == 0 ): !return[ argument ], !find_argument[ index + 1, 0 ];
 }
 
@@ -28,7 +28,7 @@ assert procedure[ : expression i64 ]{
 		?( expression ): !return[], !failed[];
 
 	failed routine[];
-		bytes i64 = write[ 2, "Assert Failed.\n" ]
+		bytes i64 = write[ 2, "Assert Failed.\n" ];
 		exit[ 1 ];
 		!return[];
 }

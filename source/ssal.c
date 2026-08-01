@@ -287,7 +287,6 @@ i32 node_length( struct source_file* file, struct ast_node* node ){
 	switch( node->kind ){
 		case error_node:
 			return 0;
-		case jump_node:
 		case list_separator_node:
 		case composite_value_node:
 		case expression_node:
@@ -333,6 +332,7 @@ i32 node_length( struct source_file* file, struct ast_node* node ){
 			return 9;
 		case enumeration_node:
 			return 11;
+		case jump_node:
 		case argument_node:
 		case register_node:
 		case type_node:
@@ -1797,7 +1797,7 @@ i32 main( i32 argc, char* argv[] ){
 		exit( 1 );
 	}
 	parse_file( argv[ 1 ]);
-unreachable
+print_ast(); unreachable
 //	validate_globals( &root_node );
 //	output_llvm( &root_node );
 #ifdef DEBUG
