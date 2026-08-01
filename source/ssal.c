@@ -813,11 +813,14 @@ struct ast_node* parse_scope_expression( struct source_file* file ){
 	return root;
 }
 
-struct ast_node* parse_expression_leaf( struct source_file* file ){
+struct ast_node* parse_expression_leaf( struct source_file* file, bool nullable ){
 	assert( file != NULL, "Malformed arguments." );
 	struct ast_token token = next_token( file );
 	if( token.kind == expression_open_token ){
 		return parse_expression( file, expression_close_token );
+	}
+	if( nullable && token.kind == argument_close_token ){
+		return NULL;
 	}
 	struct ast_node* root = new_node( file );
 	struct ast_node* node = root;
@@ -896,7 +899,10 @@ struct ast_node* parse_expression_operator( struct source_file* file, enum ast_t
 struct ast_node* parse_expression( struct source_file* file, enum ast_token_kind expected_post ){
 	assert( file != NULL, "Malformed arguments." );
 	assert( expected_post != error_token, "Malformed arguments." );
-	struct ast_node* operand = parse_expression_leaf( file );
+	struct ast_node* operand = parse_expression_leaf( file, true );
+	if( operand == NULL ){
+		return NULL;
+	}
 	struct ast_node* operator = parse_expression_operator( file, expected_post );
 	if( operator == NULL ){
 		return operand;
@@ -922,7 +928,7 @@ struct ast_node* parse_expression( struct source_file* file, enum ast_token_kind
 	root = operator;
 	operator->child = operand;
 	while( 1 ){
-		operand = parse_expression_leaf( file );
+		operand = parse_expression_leaf( file, false );
 		struct ast_node* new_operator = parse_expression_operator( file, expected_post );
 		if( new_operator == NULL ){
 			operator->sibling = operand;
