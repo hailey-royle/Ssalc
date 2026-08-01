@@ -86,6 +86,7 @@ enum ast_node_kind {
 	literal_number_node,
 	literal_string_node,
 	literal_code_node,
+	composite_value_node,
 	expression_node,
 	conditional_node,
 	conditional_call_node,
@@ -287,6 +288,7 @@ i32 node_length( struct source_file* file, struct ast_node* node ){
 			return 0;
 		case jump_node:
 		case list_separator_node:
+		case composite_value_node:
 		case expression_node:
 		case conditional_node:
 		case conditional_call_node:
@@ -377,6 +379,7 @@ char* node_kind_string( struct ast_node* node ){
 		case literal_number_node:    return "literal_number";
 		case literal_string_node:    return "literal_string";
 		case literal_code_node:      return "literal_code";
+		case composite_value_node:   return "composite_value_node";
 		case expression_node:        return "expression";
 		case conditional_node:       return "conditional";
 		case conditional_call_node:  return "conditional_call";
@@ -787,6 +790,28 @@ i8 precidence( struct source_file* file, struct ast_node* node ){
 
 struct ast_node* parse_expression( struct source_file* file, enum ast_token_kind expected_post );
 
+struct ast_node* parse_scope_expression( struct source_file* file, enum ast_token_kind expected_post ){
+	assert( file != NULL, "Malformed arguments." );
+	struct ast_token token = next_token( file );
+	struct ast_node* root = new_node( file );
+	struct ast_node* node = root;
+	while( 1 ){
+		compiler_assert_token( token.kind == identifier_token, file, token, error_level, "Expected scope identifier." );
+		node->offset = token.offset;
+		node->kind = composite_value_node;
+		token = next_token( file );
+		compiler_assert_token( token.kind == assignment_token, file, token, error_level, "Expected scope identifier." );
+		node->child = parse_expression( file, statement_end_token );
+		token = next_token( file );
+		if( token.kind == scope_close_token ){
+			break;
+		}
+	}
+	token = next_token( file );
+	compiler_assert_token( token.kind == expected_post, file, token, error_level, "Expected scope identifier." );
+	return root;
+}
+
 struct ast_node* parse_expression_leaf( struct source_file* file ){
 	assert( file != NULL, "Malformed arguments." );
 	struct ast_token token = next_token( file );
@@ -795,7 +820,10 @@ struct ast_node* parse_expression_leaf( struct source_file* file ){
 	}
 	struct ast_node* node = new_node( file );
 	node->offset = token.offset;
-	if( token.kind == identifier_token ){
+	if( token.kind == scope_open_token ){
+		node->kind = composite_value_node;
+		node->child = parse_scope_expression( file, statement_end_token );
+	} else if( token.kind == identifier_token ){
 		node->kind = register_node;
 	} else if( token.kind == literal_number_token ){
 		node->kind = literal_number_node;

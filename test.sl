@@ -11,7 +11,7 @@ parse_command_line_argumnets procedure[ @@i8 : argc i32, argv ^^i8 ]{
 		assert[ argc <> 0 ];
 		assert[ argv <> 0 ];
 		assert[ argv^ <> 0 ];
-		argument @@i8 = { data = allocate[ stack, size_of[ @i8 ] * argc ], count = argc };
+		argument @@i8 = { data = allocate[ stack, size_of[ @i8 ] * argc ]; count = argc; };
 		loop_argument[ 0, 0 ];
 
 	loop_argument routine[ index i32, count i32 ];
