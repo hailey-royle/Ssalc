@@ -1016,6 +1016,17 @@ void parse_register( struct source_file* file, struct ast_node* root ){
 struct ast_token parse_type( struct source_file* file, struct ast_node* type, struct ast_token token ){
 	assert( file != NULL, "Malformed argument." );
 	assert( type != NULL, "Malformed argument." );
+	if( token.kind == pointer_token ){
+		type->offset = token.offset;
+		token = next_token( file );
+		if( token.kind == assignment_token ){
+			type->kind = derefrence_node;
+			return token;
+		}
+		type->kind = pointer_node;
+		type->child = new_node( file );
+		type = type->child;
+	}
 	while( 1 ){
 		if( token.kind == identifier_token ){
 			type->offset = token.offset;
