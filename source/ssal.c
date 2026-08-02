@@ -419,7 +419,11 @@ void print_ast_node( struct source_file* file, struct ast_node* node, i32 depth 
         assert( node != NULL, "Malformed argument." );
 	char* kind = node_kind_string( node );
 	i32 length = node_length( file, node );
-        printf( "%*c%s%s%s  [ %.*s ]\n", depth * 2, ' ', ansi_foreground_cyan, kind, ansi_reset_graphics, length, &file->source.data[ node->offset ]);
+	if( node->kind == error_node ){
+	        printf( "%*c%s%s%s  [ %.*s ]\n", depth * 2, ' ', ansi_foreground_red, kind, ansi_reset_graphics, length, &file->source.data[ node->offset ]);
+	} else {
+	        printf( "%*c%s%s%s  [ %.*s ]\n", depth * 2, ' ', ansi_foreground_cyan, kind, ansi_reset_graphics, length, &file->source.data[ node->offset ]);
+	}
         if( node->child != NULL ){
                 print_ast_node( file, node->child, depth + 1 );
         }
