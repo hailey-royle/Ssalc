@@ -1267,11 +1267,11 @@ void parse_procedure( struct source_file* file, struct ast_node* root ){
 			token = next_token( file );
 			statement->child = new_node( file );
 			token = parse_type( file, statement->child, token );
+			statement->sibling = new_node( file );
+			statement = statement->sibling;
 			if( token.kind == argument_close_token ){
 				break;
 			}
-			statement->sibling = new_node( file );
-			statement = statement->sibling;
 			compiler_assert_token( token.kind == list_separator_token, file, token, error_level, "Expected ']' after procedure arguments." );
 			token = next_token( file );
 		}
