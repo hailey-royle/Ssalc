@@ -23,7 +23,6 @@ parse_command_line_argumnets procedure[ @@i8 : argc i32, argv ^^i8 ]{
 		?( argv@( index )^ == 0 ): !return[ argument ], !find_argument[ index + 1, 0 ];
 }
 
-
 assert procedure[ : expression i64 ]{
 		?( expression ): !return[], !failed[];
 

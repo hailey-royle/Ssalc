@@ -1335,13 +1335,13 @@ void parse_file( char* file_name ){
 	file->root = new_node( file );
 	struct ast_node* node = file->root;
 	struct ast_token token = next_token( file );
-	node->offset = token.offset;
 	while( 1 ){
 		if( token.kind == interpreter_mark_token ){
 			struct ast_token token = next_token( file );
 			node->offset = token.offset;
 			todo( "interpreter" );
 		}
+		node->offset = token.offset;
 		if( token.kind == identifier_token ){
 			token = next_token( file );
 			if( token.kind == procedure_token ){
