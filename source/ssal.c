@@ -1033,44 +1033,58 @@ void parse_register( struct source_file* file, struct ast_node* root ){
 	root->child->sibling = parse_expression( file, statement_end_token );
 }
 
+void parse_type_parameter( struct source_file* file, struct ast_node* type ){
+	assert( file != NULL, "Malformed argument." );
+	assert( type != NULL, "Malformed argument." );
+	struct ast_token token = next_token( file );
+	compiler_assert_token( token.kind == identifier_token, file, token, error_level, "Expected type." );
+	type->offset = token.offset;
+	type->kind = type_node;
+	token = next_token( file );
+	if( token.kind == argument_close_token ){
+		return;
+	} else if( token.kind == argument_open_token ){
+		type->child = new_node( file );
+		type = type->child;
+		parse_type_parameter( file, type );
+		token = next_token( file );
+		compiler_assert_token( token.kind == argument_close_token, file, token, error_level, "Expected type." );
+	} else {
+		compiler_error_token( file, token, error_level, "Expected type." );
+	}
+}
+
 struct ast_token parse_type( struct source_file* file, struct ast_node* type, struct ast_token token ){
 	assert( file != NULL, "Malformed argument." );
 	assert( type != NULL, "Malformed argument." );
-	if( token.kind == pointer_token ){
+	assert( token.kind != error_token, "Malforemd argument." );
+	while( token.kind == pointer_token ){
 		type->offset = token.offset;
+		type->kind = pointer_node;
 		token = next_token( file );
 		if( token.kind == assignment_token ){
 			type->kind = derefrence_node;
 			return token;
-		}
-		type->kind = pointer_node;
-		type->child = new_node( file );
-		type = type->child;
-	}
-	while( 1 ){
-		if( token.kind == identifier_token ){
-			type->offset = token.offset;
-			type->kind = type_node;
-			token = next_token( file );
+		} else if( token.kind == identifier_token ){
+			type->child = new_node( file );
+			type = type->child;
 			break;
-		} else if( token.kind == array_token ){
-			type->offset = token.offset;
-			type->kind = array_node;
-			type->child = new_node( file );
-			type = type->child;
-			token = next_token( file );
 		} else if( token.kind == pointer_token ){
-			type->offset = token.offset;
-			type->kind = pointer_node;
 			type->child = new_node( file );
 			type = type->child;
-			token = next_token( file );
-			if( token.kind == assignment_token ){
-				break;
-			}
 		} else {
 			compiler_error_token( file, token, error_level, "Expected type." );
 		}
+	}
+	compiler_assert_token( token.kind == identifier_token, file, token, error_level, "Expected type." );
+	type->offset = token.offset;
+	type->kind = type_node;
+	token = next_token( file );
+	if( token.kind == argument_open_token ){
+		type->child = new_node( file );
+		type = type->child;
+		parse_type_parameter( file, type );
+		token = next_token( file );
 	}
 	return token;
 }
