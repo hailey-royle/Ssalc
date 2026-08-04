@@ -1,53 +1,56 @@
 #ifndef STRINGH
 #define STRINGH
 
-bool string_from_file( struct string* source, char* file_name, i32 name_length ){
+i8 string_from_file( struct string* source, char* file_name, i32 name_length ){
 	assert( source != NULL, "Malformed args" );
 	assert( source->allocated == 0 && source->count == 0 && source->data == NULL, "String must be empty" );
 	assert( file_name != NULL, "Malformed args" );
 	char name[ name_length + 1 ];
 	memcpy( name, file_name, name_length );
 	name[ name_length ] = '\0';
-	FILE* file = fopen( file_name, "r" );
+	FILE* file = fopen( name, "r" );
 	if( file == NULL ){
-		return true;
+		return 1;
 	};
 	assert( file != NULL, "fopen failed" );
 	i32 error = fseek( file, 0, SEEK_END );
 	if( error != 0 ){
-		return true;
+		return 1;
 	};
 	i32 file_count = ftell( file );
 	rewind( file );
 	source->data = malloc( file_count + 1 );
 	if( source->data == NULL ){
-		return true;
+		return 1;
 	};
 	i64 bytes_read = (i64) fread( source->data, 1, file_count, file );
 	if( file_count != bytes_read ){
-		return true;
+		return 1;
 	};
 	fclose( file );
 	source->allocated = file_count + 1;
 	source->count = file_count;
 	source->data[ source->count ] = '\0';
-	return false;
+	return 0;
 }
 
-bool string_to_file( struct string* source, char* file_name ){
+i8 string_to_file( struct string* source, char* file_name, i32 name_length ){
 	assert( source != NULL, "Malformed args" );
 	assert( source->allocated > source->count || source->count <= 0, "Malformed internal source data" );
 	assert( file_name != NULL, "Malformed args" );
-	FILE* file = fopen( file_name, "w" );
+	char name[ name_length + 1 ];
+	memcpy( name, file_name, name_length );
+	name[ name_length ] = '\0';
+	FILE* file = fopen( name, "w" );
 	if( file == NULL ){
-		return true;
+		return 1;
 	}
 	i64 bytes_wrote = (i64) fwrite( source->data, 1, source->count, file );
 	if( source->count != bytes_wrote ){
-		return true;
+		return 1;
 	}
 	fclose( file );
-	return false;
+	return 0;
 }
 
 void string_free( struct string* source ){

@@ -5,7 +5,7 @@ _start:
 	clang -c -masm=intel source/_start.s
 
 build: _start
-	time clang source/ssal.c -o ssalc -std=c23 -Wall -Wextra -pedantic -ggdb -DDEBUG
+	time clang source/ssal.c -o ssalc -Wall -Wextra -ggdb -DDEBUG
 
 test:
 ifdef t
